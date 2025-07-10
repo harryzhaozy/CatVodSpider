@@ -36,8 +36,13 @@ public class LiteApple extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
+        try {
+            super.init(context, extend);
+        } catch (Exception e) {
+            e.printStackTrace(); // 或者记录日志、报错处理
+        }
     }
+
 
     @Override
     public String homeContent(boolean filter) {
