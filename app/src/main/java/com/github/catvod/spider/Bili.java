@@ -5,7 +5,7 @@ import android.text.TextUtils;
 
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.utils.OkHttpUtil;
+import com.github.catvod.net.OkHttpUtil;
 
 import org.json.JSONArray;
 import org.json.JSONException;
