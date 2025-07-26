@@ -6,7 +6,7 @@ import android.util.Base64;
 
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.utils.okhttp.OkHttpUtil;
+import com.github.catvod.net.okhttp.OkHttpUtil;
 
 import org.json.JSONArray;
 import org.json.JSONException;
