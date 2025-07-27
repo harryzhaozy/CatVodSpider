@@ -14,7 +14,7 @@ public class Proxy {
     private static int port;
 
     public static Object[] proxy(Map<String, String> params) throws Exception {
-        LogUtils.e("Proxy.java >>>传入params ",params.get("do"));
+        LogUtils.e("Proxy.java >>>传入params "+params.get("do"));
         switch (params.get("do")) {
             case "ck":
                 return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes(StandardCharsets.UTF_8))};
