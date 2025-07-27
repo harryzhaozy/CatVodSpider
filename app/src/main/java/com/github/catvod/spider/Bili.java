@@ -219,6 +219,11 @@ public class Bili extends Spider {
         String cid = ids[1];
         String[] acceptDesc = ids[3].split(":");
         String[] acceptQuality = ids[2].split(":");
+        LogUtils.e("Bili.java >>> playerContent 入参id = " + id);
+        LogUtils.e("Bili.java >>> playerContent 请求cid = " + cid);
+        LogUtils.e("Bili.java >>> playerContent 请求aid = " + aid);
+        LogUtils.e("Bili.java >>> playerContent 的acceptDesc = " + acceptDesc);
+        
         List<String> url = new ArrayList<>();
         String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=".concat(cid);
         for (int i = 0; i < acceptDesc.length; i++) {
