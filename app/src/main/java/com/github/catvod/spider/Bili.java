@@ -180,16 +180,18 @@ public class Bili extends Spider {
         LinkedHashMap<String, String> flag = new LinkedHashMap<>();
         for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         flag.put("B站", TextUtils.join("#", episode));
-
-        episode = new ArrayList<>();
-        api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
-        json = OkHttp.string(api, getHeader());
-        JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
-        for (int i = 0; i < array.size(); i++) {
-            JsonObject object = array.get(i).getAsJsonObject();
-            episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
-        }
-        flag.put("相关", TextUtils.join("#", episode));
+       
+        LogUtils.e("Bili.java >>>B站 " +  episode);
+        
+        //episode = new ArrayList<>();
+        //api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
+        //json = OkHttp.string(api, getHeader());
+        //JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
+        //for (int i = 0; i < array.size(); i++) {
+        //    JsonObject object = array.get(i).getAsJsonObject();
+        //    episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
+        //}
+        //flag.put("相关", TextUtils.join("#", episode));
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
