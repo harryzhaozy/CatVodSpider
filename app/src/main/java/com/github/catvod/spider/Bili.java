@@ -219,7 +219,7 @@ public class Bili extends Spider {
         String[] ids = id.split("\\+");
         if (ids.length < 4) {
             LogUtils.e("playerContent - 参数错误: id 参数不足, id=" + id);
-            return result.toString();
+            return "";
         }
         String aid = ids[0];
         String cid = ids[1];
@@ -227,7 +227,7 @@ public class Bili extends Spider {
         String[] acceptQuality = ids[2].split(":");
         if (acceptQuality.length != acceptDesc.length) {
             LogUtils.e("playerContent - 清晰度和描述长度不一致");
-            return result.toString();
+            return "";
         }
         LogUtils.e("Bili.java >>> playerContent 入参id = " + id);
         LogUtils.e("Bili.java >>> playerContent 请求cid = " + cid);
