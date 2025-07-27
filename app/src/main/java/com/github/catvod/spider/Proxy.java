@@ -7,19 +7,21 @@ import java.io.ByteArrayInputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-
+import com.github.catvod.utils.LogUtils;
 public class Proxy {
 
     private static Method method;
     private static int port;
 
     public static Object[] proxy(Map<String, String> params) throws Exception {
+        LogUtils.e("Proxy.java >>>传入params ",params.get("do"));
         switch (params.get("do")) {
             case "ck":
                 return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes(StandardCharsets.UTF_8))};
             case "mqitv":
                 return MQiTV.proxy(params);
             case "bili":
+                LogUtils.e("Proxy.java >>>调用Proxy ");
                 return Bili.proxy(params);
             case "webdav":
                 return WebDAV.vod(params);
