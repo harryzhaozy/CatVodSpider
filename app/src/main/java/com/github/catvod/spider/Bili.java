@@ -149,14 +149,13 @@ public class Bili extends Spider {
         vod.setVodRemarks(detail.getDuration() / 60 + "分鐘");
 
       
-        LogUtils.e("Bili.java >>>vodId = " + vod.getVodId());
-        LogUtils.e("Bili.java >>>vodName = " + vod.getVodName());
-        LogUtils.e("Bili.java >>>vodPic = " + vod.getVodPic());
-        LogUtils.e("Bili.java >>>vodDirector = " + vod.getVodDirector());
-        LogUtils.e("Bili.java >>>vodRemarks = " + vod.getVodRemarks());
-        LogUtils.e("Bili.java >>>vodContent = " + vod.getVodContent());
-        LogUtils.e("Bili.java >>>vodPlayFrom = " + vod.getVodPlayFrom());
-        LogUtils.e("Bili.java >>>vodPlayUrl = " + vod.getVodPlayUrl());
+        LogUtils.e("Bili.java >>>vodId = " + ids.get(0));
+        LogUtils.e("Bili.java >>>vodName = " + detail.getTitle());
+        LogUtils.e("Bili.java >>>vodPic = " + detail.getPic());
+        LogUtils.e("Bili.java >>>vodDirector = " + getOwner().getFormat());
+        LogUtils.e("Bili.java >>>vodRemarks = " + .getDuration() / 60);
+        LogUtils.e("Bili.java >>>vodContent = " +detail.getDesc());
+       
 
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
@@ -194,6 +193,10 @@ public class Bili extends Spider {
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
+        
+        LogUtils.e("Bili.java >>>vodPlayFrom = " + TextUtils.join("$$$", flag.keySet()));
+        LogUtils.e("Bili.java >>>vodPlayUrl = " + TextUtils.join("$$$", flag.values()));
+        
         return Result.string(vod);
     }
 
