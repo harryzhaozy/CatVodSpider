@@ -2,8 +2,7 @@ package com.github.catvod.spider;
 
 import android.content.Context;
 import android.text.TextUtils;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+
 
 
 import com.github.catvod.bean.Class;
@@ -217,62 +216,34 @@ public class Bili extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-    JSONObject result = new JSONObject();
-
-    // 1. 解析 id
-    String[] ids = id.split("\\+");
-    if (ids.length < 4) {
-        LogUtils.e("playerContent - 参数错误: id 参数不足, id=" + id);
-        return result.toString(); // 返回空 JSON
-    }
-
-    String aid = ids[0];
-    String cid = ids[1];
-    String[] acceptQuality = ids[2].split(":");
-    String[] acceptDesc = ids[3].split(":");
-
-    if (acceptQuality.length != acceptDesc.length) {
-        LogUtils.e("playerContent - 清晰度和描述长度不一致");
-        return result.toString();
-    }
-
-    // 2. 构建播放链接数组
-    JSONArray urlList = new JSONArray();
-    for (int i = 0; i < acceptQuality.length; i++) {
-        String qn = acceptQuality[i].trim();
-        String desc = acceptDesc[i].trim();
-        if (qn.isEmpty() || desc.isEmpty()) continue;
-
-        // 格式: 描述, 播放链接
-        urlList.put(desc);
-        urlList.put("proxy://do=bili&aid=" + aid + "&cid=" + cid + "&qn=" + qn + "&type=mpd");
-    }
-
-    // 3. 构建弹幕地址
-    JSONArray danmakuList = new JSONArray();
-    JSONObject danmakuObj = new JSONObject();
-    danmakuObj.put("name", "B站");
-    danmakuObj.put("url", "https://api.bilibili.com/x/v1/dm/list.so?oid=" + cid);
-    danmakuList.put(danmakuObj);
-
-    // 4. 构建 header
-    JSONObject headers = new JSONObject();
-    headers.put("cookie", "buvid3=84B0395D-C9F2-C490-E92E-A09AB48FE26E71636infoc");
-    headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36");
-    headers.put("Referer", "https://www.bilibili.com");
-
-    // 5. 返回结构
-    result.put("header", headers.toString());
-    result.put("format", "application/dash+xml");
-    result.put("danmaku", danmakuList);
-    result.put("url", urlList);
-    result.put("parse", 0);
-    result.put("jx", 0);
-
-    LogUtils.d("playerContent 返回: " + result.toString());
+        String[] ids = id.split("\\+");
+        if (ids.length < 4) {
+            LogUtils.e("playerContent - 参数错误: id 参数不足, id=" + id);
+            return result.toString();
+        }
+        String aid = ids[0];
+        String cid = ids[1];
+        String[] acceptDesc = ids[3].split(":");
+        String[] acceptQuality = ids[2].split(":");
+        if (acceptQuality.length != acceptDesc.length) {
+            LogUtils.e("playerContent - 清晰度和描述长度不一致");
+            return result.toString();
+        }
+        LogUtils.e("Bili.java >>> playerContent 入参id = " + id);
+        LogUtils.e("Bili.java >>> playerContent 请求cid = " + cid);
+        LogUtils.e("Bili.java >>> playerContent 请求aid = " + aid);
+        LogUtils.e("Bili.java >>> playerContent 的acceptDesc = " + acceptDesc);
         
-    return result.toString();
-}
+        List<String> url = new ArrayList<>();
+        String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=".concat(cid);
+        for (int i = 0; i < acceptDesc.length; i++) {
+            url.add(acceptDesc[i]);
+            url.add("proxy://do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
+        }
+        LogUtils.e("Bili.java >>> playerContent的url：\n" + url);
+         LogUtils.e("Bili.java >>> playerContent danmaku返回的值：\n" + Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
+        return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
+    }
 
 
     public static Object[] proxy(Map<String, String> params) {
