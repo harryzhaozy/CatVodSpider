@@ -152,8 +152,8 @@ public class Bili extends Spider {
         LogUtils.e("Bili.java >>>vodId = " + ids.get(0));
         LogUtils.e("Bili.java >>>vodName = " + detail.getTitle());
         LogUtils.e("Bili.java >>>vodPic = " + detail.getPic());
-        LogUtils.e("Bili.java >>>vodDirector = " + getOwner().getFormat());
-        LogUtils.e("Bili.java >>>vodRemarks = " + getDuration() / 60);
+        LogUtils.e("Bili.java >>>vodDirector = " + detail.getOwner().getFormat());
+        LogUtils.e("Bili.java >>>vodRemarks = " + detail.getDuration() / 60);
         LogUtils.e("Bili.java >>>vodContent = " +detail.getDesc());
        
 
