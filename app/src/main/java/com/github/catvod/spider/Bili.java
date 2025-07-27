@@ -148,10 +148,26 @@ public class Bili extends Spider {
         vod.setVodDirector(detail.getOwner().getFormat());
         vod.setVodRemarks(detail.getDuration() / 60 + "分鐘");
 
+      
+        LogUtils.e("Bili.java >>>vodId = " + vod.getVodId());
+        LogUtils.e("Bili.java >>>vodName = " + vod.getVodName());
+        LogUtils.e("Bili.java >>>vodPic = " + vod.getVodPic());
+        LogUtils.e("Bili.java >>>vodDirector = " + vod.getVodDirector());
+        LogUtils.e("Bili.java >>>vodRemarks = " + vod.getVodRemarks());
+        LogUtils.e("Bili.java >>>vodContent = " + vod.getVodContent());
+        LogUtils.e("Bili.java >>>vodPlayFrom = " + vod.getVodPlayFrom());
+        LogUtils.e("Bili.java >>>vodPlayUrl = " + vod.getVodPlayUrl());
+
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
         api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
+        
+        LogUtils.e("Bili.java >>> detailContent DASH请求URL = " + api);
+        
         json = OkHttp.string(api, getHeader());
+
+        LogUtils.e("Bili.java >>> DASH返回JSON内容：\n" + json);
+        
         Data play = Resp.objectFrom(json).getData();
         for (int i = 0; i < play.getAcceptQuality().size(); i++) {
             int qn = play.getAcceptQuality().get(i);
