@@ -21,6 +21,7 @@ import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.github.catvod.utils.LogUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -133,6 +134,9 @@ public class Bili extends Spider {
         String aid = split[1];
 
         String api = "https://api.bilibili.com/x/web-interface/view?aid=" + aid;
+        LogUtils.e("Bili.java >>> detailContent 请求bvid = " + bvid);
+        LogUtils.e("Bili.java >>> detailContent 请求aid = " + aid);
+        LogUtils.e("Bili.java >>> detailContent 请求URL = " + api);
         String json = OkHttp.string(api, getHeader());
         Data detail = Resp.objectFrom(json).getData();
         Vod vod = new Vod();
