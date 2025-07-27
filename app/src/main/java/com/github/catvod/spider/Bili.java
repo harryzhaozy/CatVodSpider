@@ -226,6 +226,7 @@ public class Bili extends Spider {
             url.add("proxy://do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
         LogUtils.e("Bili.java >>> playerContent的url：\n" + url);
+         LogUtils.e("Bili.java >>> playerContent danmaku返回的值：\n" + Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
