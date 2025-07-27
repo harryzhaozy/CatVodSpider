@@ -13,10 +13,12 @@ public class Proxy extends Spider {
     private static int port = -1;
 
     public static Object[] proxy(Map<String, String> params) throws Exception {
+        LogUtils.e("Proxy.java >>> Proxy传入参数:"+params);
         switch (params.get("do")) {
             case "ck":
                 return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes("UTF-8"))};
             case "bili":
+                LogUtils.e("Proxy.java >>> 调用Proxy");
                 return Bili.proxy(params);
             case "webdav":
                 return WebDAV.vod(params);
