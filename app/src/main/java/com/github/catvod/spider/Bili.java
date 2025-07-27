@@ -153,7 +153,7 @@ public class Bili extends Spider {
         LogUtils.e("Bili.java >>>vodName = " + detail.getTitle());
         LogUtils.e("Bili.java >>>vodPic = " + detail.getPic());
         LogUtils.e("Bili.java >>>vodDirector = " + getOwner().getFormat());
-        LogUtils.e("Bili.java >>>vodRemarks = " + .getDuration() / 60);
+        LogUtils.e("Bili.java >>>vodRemarks = " + getDuration() / 60);
         LogUtils.e("Bili.java >>>vodContent = " +detail.getDesc());
        
 
@@ -223,6 +223,7 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add("proxy://do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
+        LogUtils.e("Bili.java >>> playerContent的url：\n" + url);
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
