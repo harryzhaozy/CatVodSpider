@@ -194,8 +194,8 @@ public class Bili extends Spider {
         //flag.put("相关", TextUtils.join("#", episode));
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
-        vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        
+        //vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
+        vod.setVodPlayUrl("");
         LogUtils.e("Bili.java >>>vodPlayFrom = " + TextUtils.join("$$$", flag.keySet()));
         LogUtils.e("Bili.java >>>vodPlayUrl = " + TextUtils.join("$$$", flag.values()));
         
