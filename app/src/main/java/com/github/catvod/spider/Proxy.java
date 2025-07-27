@@ -8,20 +8,15 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import com.github.catvod.utils.LogUtils;
-public class Proxy {
+public class Proxy extends Spider {
 
-    private static Method method;
-    private static int port;
+    private static int port = -1;
 
     public static Object[] proxy(Map<String, String> params) throws Exception {
-        LogUtils.e("Proxy.java >>>传入params "+params.get("do"));
         switch (params.get("do")) {
             case "ck":
-                return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes(StandardCharsets.UTF_8))};
-            case "mqitv":
-                return MQiTV.proxy(params);
+                return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes("UTF-8"))};
             case "bili":
-                LogUtils.e("Proxy.java >>>调用Proxy ");
                 return Bili.proxy(params);
             case "webdav":
                 return WebDAV.vod(params);
@@ -32,41 +27,27 @@ public class Proxy {
         }
     }
 
-    public static void init() {
-        try {
-            Class<?> clz = Class.forName("com.github.catvod.Proxy");
-            port = (int) clz.getMethod("getPort").invoke(null);
-            method = clz.getMethod("getUrl", boolean.class);
-            SpiderDebug.log("本地代理端口:" + port);
-        } catch (Throwable e) {
-            findPort();
+    static void adjustPort() {
+        if (Proxy.port > 0) return;
+        int port = 9978;
+        while (port < 10000) {
+            String resp = OkHttp.string("http://127.0.0.1:" + port + "/proxy?do=ck", null);
+            if (resp.equals("ok")) {
+                SpiderDebug.log("Found local server port " + port);
+                Proxy.port = port;
+                break;
+            }
+            port++;
         }
     }
 
     public static int getPort() {
+        adjustPort();
         return port;
     }
 
     public static String getUrl() {
-        return getUrl(true);
-    }
-
-    public static String getUrl(boolean local) {
-        try {
-            return (String) method.invoke(null, local);
-        } catch (Throwable e) {
-            return "http://127.0.0.1:" + port + "/proxy";
-        }
-    }
-
-    private static void findPort() {
-        if (port > 0) return;
-        for (int p = 8964; p < 9999; p++) {
-            if ("ok".equals(OkHttp.string("http://127.0.0.1:" + p + "/proxy?do=ck", null))) {
-                SpiderDebug.log("本地代理端口:" + p);
-                port = p;
-                break;
-            }
-        }
+        adjustPort();
+        return "http://127.0.0.1:" + port + "/proxy";
     }
 }
