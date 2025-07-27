@@ -240,6 +240,9 @@ public class Bili extends Spider {
         String cid = params.get("cid");
         String qn = params.get("qn");
         String api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + cid + "&qn=" + qn + "&fnval=4048&fourk=1";
+
+        LogUtils.e("Bili.java >>> proxy 请求api = " + api);
+        
         String json = OkHttp.string(api, getHeader());
         Resp resp = Resp.objectFrom(json);
         Dash dash = resp.getData().getDash();
@@ -252,6 +255,9 @@ public class Bili extends Spider {
         result[0] = 200;
         result[1] = "application/dash+xml";
         result[2] = new ByteArrayInputStream(mpd.getBytes());
+        
+        LogUtils.e("Bili.java >>> proxy的返回值 = " + result);
+        
         return result;
     }
 
