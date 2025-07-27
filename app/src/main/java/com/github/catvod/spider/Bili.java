@@ -2,6 +2,9 @@ package com.github.catvod.spider;
 
 import android.content.Context;
 import android.text.TextUtils;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
 
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Danmaku;
