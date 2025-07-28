@@ -40,7 +40,7 @@ public class LiteApple extends Spider {
         headers.put("Range", "bytes=0-");
         headers.put("version", "XPGBOX com.phoenix.tv1.3.3");
         headers.put("Icy-MetaData", "1");
-        headers.put("hash", "60b2");
+        //headers.put("hash", "60b2");
         headers.put("screenx", "1280");
 
         // 生成当前 Unix 时间戳（单位：秒）
