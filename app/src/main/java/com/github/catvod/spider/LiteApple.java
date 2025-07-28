@@ -30,7 +30,7 @@ public class LiteApple extends Spider {
 
     private HashMap<String, String> getHeaders(String url, String data) {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "okhttp/4.9.1 Lvaf/58.12.100");
+        headers.put("User-Agent", "okhttp/3.12.11 Lvaf/58.12.100");
         return headers;
     }
 
@@ -238,7 +238,7 @@ public class LiteApple extends Spider {
     public String detailContent(List<String> ids) {
         try {
             String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
-            String PlayHost="http://c.xpgtv.net/m3u8key/";
+            String PlayHost="http://c.xpgtv.net/m3u8/";
             String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
             JSONObject dataObject = new JSONObject(content);
             JSONObject vObj = dataObject.getJSONObject("data");
@@ -260,7 +260,7 @@ public class LiteApple extends Spider {
             JSONArray urls = vObj.getJSONArray("urls");
             for (int i = 0; i < urls.length(); i++) {
                 JSONObject u = urls.getJSONObject(i);
-                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url")+".key");
+                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url")+".m3u8");
             }
             
             LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
