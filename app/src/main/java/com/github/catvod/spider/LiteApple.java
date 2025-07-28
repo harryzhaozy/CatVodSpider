@@ -41,7 +41,7 @@ public class LiteApple extends Spider {
         return md5(timestamp).substring(0, 4);
     }
 
-    private String md5(String input) {
+    public static String md5(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
