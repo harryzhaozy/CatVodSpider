@@ -260,8 +260,8 @@ public class LiteApple extends Spider {
         try {
             String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
             String PlayHost="http://c.xpgtv.net/m3u8/";
-            //String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
-            String content = OkHttp.string(url, getCustomHeaders());
+            String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
+            //String content = OkHttp.string(url, getCustomHeaders());
             JSONObject dataObject = new JSONObject(content);
             JSONObject vObj = dataObject.getJSONObject("data");
             JSONObject result = new JSONObject();
@@ -303,7 +303,8 @@ public class LiteApple extends Spider {
         try {
             JSONObject result = new JSONObject();
             result.put("parse", 0);
-            result.put("header", new JSONObject(getHeaders(id, null)).toString());
+            //result.put("header", new JSONObject(getHeaders(id, null)).toString());
+            result.put("header", new JSONObject(getCustomHeaders()).toString());
             result.put("playUrl", "");
             result.put("url", id);
             return result.toString();
