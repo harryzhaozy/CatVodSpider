@@ -47,7 +47,7 @@ public class LiteApple extends Spider {
     @Override
     public String homeContent(boolean filter) {
         try {
-            String url = siteUrl + "/v2.vod/androidtypes";
+            String url = siteUrl + "api.php/v2.vod/androidtypes";
             String content = OkHttp.string(url, getHeaders(url, null));
             JSONObject jsonObject = new JSONObject(content);
             JSONArray jsonArray = jsonObject.getJSONArray("data");
