@@ -260,7 +260,7 @@ public class LiteApple extends Spider {
             JSONArray urls = vObj.getJSONArray("urls");
             for (int i = 0; i < urls.length(); i++) {
                 JSONObject u = urls.getJSONObject(i);
-                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url"));
+                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url")+".m3u8");
             }
             
             LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
