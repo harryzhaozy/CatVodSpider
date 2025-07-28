@@ -237,7 +237,7 @@ public class LiteApple extends Spider {
     @Override
     public String detailContent(List<String> ids) {
         try {
-            String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
+            String url = siteUrl + "api.php/v2.vod/androiddetail?vod_id=" + ids.get(0);
             String PlayHost="http://c.xpgtv.net/m3u8/";
             String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
             JSONObject dataObject = new JSONObject(content);
@@ -260,7 +260,7 @@ public class LiteApple extends Spider {
             JSONArray urls = vObj.getJSONArray("urls");
             for (int i = 0; i < urls.length(); i++) {
                 JSONObject u = urls.getJSONObject(i);
-                playUrls.add(u.getString("key") + "$" +PlayHost+ u.getString("url"));
+                playUrls.add(u.getString("key") + "$" +u.getString("url"));
             }
 
             vodAtom.put("vod_play_from", "LiteApple");
