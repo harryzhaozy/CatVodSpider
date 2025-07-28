@@ -67,8 +67,8 @@ public class LiteApple extends Spider {
 
         // 生成当前 Unix 时间戳（单位：秒）
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
-        headers.put("hash", getSimpleHash(timestamp));
-        headers.put("timestamp", timestamp);
+        headers.put("hash", "60b2");
+        headers.put("timestamp", "1753708324");
 
         headers.put("token", "RXQbgQKl3QkFZkIPGwGvH5kofvCokkkn/a893wC2IId7HQFmy0Eh24osz555X12xGVFxQLTaGuBqU/Y7KU4lStp4UjR7giPxdwoTOsU6R3oc4yZZTQc/yTKh1mH3ckZhx6VsQCEoFf6q");
         headers.put("screeny", "720");
