@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-
+import com.github.catvod.utils.LogUtils;
 
 public class LiteApple extends Spider {
     private static final String siteUrl = "http://item.xpgtv.com/";
@@ -262,7 +262,9 @@ public class LiteApple extends Spider {
                 JSONObject u = urls.getJSONObject(i);
                 playUrls.add(u.getString("key") + "$" +u.getString("url"));
             }
-
+            
+            LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
+            
             vodAtom.put("vod_play_from", "LiteApple");
             vodAtom.put("vod_play_url", TextUtils.join("#", playUrls));
             list.put(vodAtom);
