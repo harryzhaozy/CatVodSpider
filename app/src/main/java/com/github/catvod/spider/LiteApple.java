@@ -23,6 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+
+
+import java.nio.charset.StandardCharsets;
+
 import com.github.catvod.utils.LogUtils;
 
 public class LiteApple extends Spider {
@@ -37,6 +41,20 @@ public class LiteApple extends Spider {
         return md5(timestamp).substring(0, 4);
     }
 
+    private String md5(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b & 0xff));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+    
     private HashMap<String, String> getCustomHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("user_id", "XPGBOX");
