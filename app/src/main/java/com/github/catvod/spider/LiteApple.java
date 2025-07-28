@@ -33,6 +33,27 @@ public class LiteApple extends Spider {
         headers.put("User-Agent", "okhttp/3.12.11 Lvaf/58.12.100");
         return headers;
     }
+    private HashMap<String, String> getCustomHeaders() {
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("user_id", "XPGBOX");
+        headers.put("token2", "enxerhSl0jk2TGhbZCygMdwoKqOmyxsk/Kw8tVy4dsRBE1o1xBhWhoFbh98=");
+        headers.put("Range", "bytes=0-");
+        headers.put("version", "XPGBOX com.phoenix.tv1.3.3");
+        headers.put("Icy-MetaData", "1");
+        headers.put("hash", "60b2");
+        headers.put("screenx", "1280");
+
+        // 生成当前 Unix 时间戳（单位：秒）
+        String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+        headers.put("timestamp", timestamp);
+
+        headers.put("token", "RXQbgQKl3QkFZkIPGwGvH5kofvCokkkn/a893wC2IId7HQFmy0Eh24osz555X12xGVFxQLTaGuBqU/Y7KU4lStp4UjR7giPxdwoTOsU6R3oc4yZZTQc/yTKh1mH3ckZhx6VsQCEoFf6q");
+        headers.put("screeny", "720");
+        headers.put("User-Agent", "Lvaf/58.12.100");
+        headers.put("Host", "c.xpgtv.net");
+        headers.put("Connection", "Keep-Alive");
+        return headers;
+    }
 
     @Override
     public void init(Context context, String extend) {
@@ -239,7 +260,8 @@ public class LiteApple extends Spider {
         try {
             String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
             String PlayHost="http://c.xpgtv.net/m3u8/";
-            String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
+            //String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
+            String content = OkHttp.string(url, getCustomHeaders());
             JSONObject dataObject = new JSONObject(content);
             JSONObject vObj = dataObject.getJSONObject("data");
             JSONObject result = new JSONObject();
