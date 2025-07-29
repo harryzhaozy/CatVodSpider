@@ -343,7 +343,7 @@ public class LiteApple extends Spider {
             if (!url.endsWith(".m3u8")) url += ".m3u8";
 
             Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", userAgent);
+            headers.put("User-Agent","okhttp/3.12.11");
             headers.put("Connection", "Keep-Alive");
             headers.put("Accept-Language", "zh-CN,zh;q=0.8");
             headers.put("user_id", "XPGBOX");
