@@ -377,7 +377,7 @@ public class LiteApple extends Spider {
             } catch (Exception e) {
                 SpiderDebug.log(e);
             return "";
-        
+        }  
     }
 
     @Override
