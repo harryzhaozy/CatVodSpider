@@ -31,7 +31,8 @@ import com.github.catvod.utils.LogUtils;
 
 public class LiteApple extends Spider {
     private static final String siteUrl = "http://item.xpgtv.com/";
-
+    private final String playHost = "http://c.xpgtv.net/m3u8/";
+    
     private HashMap<String, String> getHeaders(String url, String data) {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "okhttp/3.12.11 Lvaf/58.12.100");
@@ -66,7 +67,7 @@ public class LiteApple extends Spider {
         headers.put("screenx", "1280");
 
         // 生成当前 Unix 时间戳（单位：秒）
-        String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+        //String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         headers.put("hash", "60b2");
         headers.put("timestamp", "1753708324");
 
@@ -282,7 +283,7 @@ public class LiteApple extends Spider {
     public String detailContent(List<String> ids) {
         try {
             String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
-            String PlayHost="http://c.xpgtv.net/m3u8/";
+            //String PlayHost="http://c.xpgtv.net/m3u8/";
             String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
             //String content = OkHttp.string(url, getCustomHeaders());
             JSONObject dataObject = new JSONObject(content);
@@ -305,12 +306,12 @@ public class LiteApple extends Spider {
             JSONArray urls = vObj.getJSONArray("urls");
             for (int i = 0; i < urls.length(); i++) {
                 JSONObject u = urls.getJSONObject(i);
-                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url")+".m3u8");
+                playUrls.add(u.getString("key") + "$" +PlayHost+u.getString("url"));
             }
             
             LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
             
-            vodAtom.put("vod_play_from", "LiteApple");
+            vodAtom.put("vod_play_from", "小苹果");
             vodAtom.put("vod_play_url", TextUtils.join("#", playUrls));
             list.put(vodAtom);
             result.put("list", list);
@@ -323,6 +324,7 @@ public class LiteApple extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
+       /*
         try {
             JSONObject result = new JSONObject();
             result.put("parse", 0);
@@ -335,6 +337,47 @@ public class LiteApple extends Spider {
             SpiderDebug.log(e);
         }
         return "";
+        */
+        try {
+            String url = id;
+            if (!url.endsWith(".m3u8")) url += ".m3u8";
+
+            Map<String, String> headers = new HashMap<>();
+            headers.put("User-Agent", userAgent);
+            headers.put("Connection", "Keep-Alive");
+            headers.put("Accept-Language", "zh-CN,zh;q=0.8");
+            headers.put("user_id", "XPGBOX");
+            headers.put("token2", "XFxIummRrngadHB4TCzeUaleebTX10Vl/ftCvGLPeI5tN2Y/liZ5tY5e4t8=");
+            headers.put("version", "XPGBOX com.phoenix.tv1.3.3");
+            headers.put("hash", "0d51");
+            headers.put("screenx", "2331");
+            headers.put("token", "SH4EsXSBhi1ybXp3XQypB5lsfLfbzSpim+hOlmv7IIZ9Kkwoykkh1Y0r9dAKGx/0Smx2VqjAKdYKQuImbjN/Vuc2GWY/wnqwKk1McYhZES5fuT4fGlR0n2ii1nKqbBk8ketLdT0CXrXr8kcZVTdW77fUVG8S5jaTrSrsN/HnCiT4XT1GEkdnV0pqcr5wQL7NV2HHkG/e");
+            headers.put("timestamp", "1731848468");
+            headers.put("screeny", "1121");
+
+            String m3u8 = OkHttp.string(url, headers);
+            if (m3u8.contains("key")) {
+                String[] lines = m3u8.split("\n");
+                String prefix = url.substring(0, url.indexOf("m3u8"));
+                for (int i = 3; i < lines.length; i++) {
+                    if (lines[i].contains("key")) {
+                        lines[i] = lines[i].replace("/m3u8key", prefix + "m3u8key");
+                    }
+                }
+                m3u8 = String.join("\n", lines);
+            }
+
+            JSONObject result = new JSONObject();
+            result.put("parse", 0);
+            result.put("type", "m3u8");
+            result.put("playUrl", "");
+            result.put("url", m3u8);
+            return result.toString();
+
+            } catch (Exception e) {
+                SpiderDebug.log(e);
+            return "";
+        
     }
 
     @Override
