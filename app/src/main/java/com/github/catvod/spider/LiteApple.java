@@ -289,7 +289,7 @@ public class LiteApple extends Spider {
                 playUrls.add(u.getString("key") + "$" +playHost+u.getString("url"));
             }
             
-            LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
+            //LogUtils.e("LiteApple.java >>> detailContent playUrls = " + playUrls);
             
             vodAtom.put("vod_play_from", "小苹果");
             vodAtom.put("vod_play_url", TextUtils.join("#", playUrls));
