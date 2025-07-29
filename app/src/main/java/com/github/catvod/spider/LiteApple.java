@@ -74,7 +74,7 @@ public class LiteApple extends Spider {
         headers.put("token", "RXQbgQKl3QkFZkIPGwGvH5kofvCokkkn/a893wC2IId7HQFmy0Eh24osz555X12xGVFxQLTaGuBqU/Y7KU4lStp4UjR7giPxdwoTOsU6R3oc4yZZTQc/yTKh1mH3ckZhx6VsQCEoFf6q");
         headers.put("screeny", "720");
         headers.put("User-Agent", "Lvaf/58.12.100");
-        headers.put("Host", "c.xpgtv.net");
+        //headers.put("Host", "c.xpgtv.net");
         headers.put("Connection", "Keep-Alive");
         return headers;
     }
