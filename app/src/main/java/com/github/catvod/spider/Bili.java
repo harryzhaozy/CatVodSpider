@@ -136,9 +136,7 @@ public class Bili extends Spider {
         String aid = split[1];
 
         String api = "https://api.bilibili.com/x/web-interface/view?aid=" + aid;
-        LogUtils.e("Bili.java >>> detailContent 请求bvid = " + bvid);
-        LogUtils.e("Bili.java >>> detailContent 请求aid = " + aid);
-        LogUtils.e("Bili.java >>> detailContent 请求URL = " + api);
+        //LogUtils.e("Bili.java >>> detailContent 请求bvid = " + bvid);
         String json = OkHttp.string(api, getHeader());
         Data detail = Resp.objectFrom(json).getData();
         Vod vod = new Vod();
@@ -151,23 +149,18 @@ public class Bili extends Spider {
         vod.setVodRemarks(detail.getDuration() / 60 + "分鐘");
 
       
-        LogUtils.e("Bili.java >>>vodId = " + ids.get(0));
-        LogUtils.e("Bili.java >>>vodName = " + detail.getTitle());
-        LogUtils.e("Bili.java >>>vodPic = " + detail.getPic());
-        LogUtils.e("Bili.java >>>vodDirector = " + detail.getOwner().getFormat());
-        LogUtils.e("Bili.java >>>vodRemarks = " + detail.getDuration() / 60);
-        LogUtils.e("Bili.java >>>vodContent = " +detail.getDesc());
+       
        
 
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
         api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
         
-        LogUtils.e("Bili.java >>> detailContent DASH请求URL = " + api);
+       
         
         json = OkHttp.string(api, getHeader());
 
-        LogUtils.e("Bili.java >>> DASH返回JSON内容：\n" + json);
+       
         
         Data play = Resp.objectFrom(json).getData();
         for (int i = 0; i < play.getAcceptQuality().size(); i++) {
@@ -183,7 +176,7 @@ public class Bili extends Spider {
         for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         flag.put("B站", TextUtils.join("#", episode));
        
-        LogUtils.e("Bili.java >>>B站 " +  episode);
+       
         
         //episode = new ArrayList<>();
         //api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
@@ -198,9 +191,7 @@ public class Bili extends Spider {
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
         
-        LogUtils.e("Bili.java >>>vodPlayFrom = " + TextUtils.join("$$$", flag.keySet()));
-        LogUtils.e("Bili.java >>>vodPlayUrl = " + TextUtils.join("$$$", flag.values()));
-        LogUtils.e("Bili.java >>>detailContent返回值" + Result.string(vod));
+        
         return Result.string(vod);
     }
 
@@ -229,10 +220,7 @@ public class Bili extends Spider {
             LogUtils.e("playerContent - 清晰度和描述长度不一致");
             return "";
         }
-        LogUtils.e("Bili.java >>> playerContent 入参id = " + id);
-        LogUtils.e("Bili.java >>> playerContent 请求cid = " + cid);
-        LogUtils.e("Bili.java >>> playerContent 请求aid = " + aid);
-        LogUtils.e("Bili.java >>> playerContent 的acceptDesc = " + acceptDesc);
+       
         
         List<String> url = new ArrayList<>();
         String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=".concat(cid);
@@ -240,8 +228,7 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add(Proxy.getUrl() + "?do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
-        LogUtils.e("Bili.java >>> playerContent的url：\n" + url);
-         LogUtils.e("Bili.java >>> playerContent danmaku返回的值：\n" + Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
+       
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
@@ -252,7 +239,7 @@ public class Bili extends Spider {
         String qn = params.get("qn");
         String api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + cid + "&qn=" + qn + "&fnval=4048&fourk=1";
 
-        LogUtils.e("Bili.java >>> proxy 请求api = " + api);
+       
         
         String json = OkHttp.string(api, getHeader());
         Resp resp = Resp.objectFrom(json);
@@ -267,7 +254,7 @@ public class Bili extends Spider {
         result[1] = "application/dash+xml";
         result[2] = new ByteArrayInputStream(mpd.getBytes());
         
-        LogUtils.e("Bili.java >>> proxy的返回值 = " + result);
+        
         
         return result;
     }
