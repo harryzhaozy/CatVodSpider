@@ -38,23 +38,9 @@ public class LiteApple extends Spider {
         headers.put("User-Agent", "okhttp/3.12.11 Lvaf/58.12.100");
         return headers;
     }
-    public static String getSimpleHash(String timestamp) {
-        return md5(timestamp).substring(0, 4);
-    }
+    
 
-    public static String md5(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b & 0xff));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
+    
     
     private HashMap<String, String> getCustomHeaders() {
         HashMap<String, String> headers = new HashMap<>();
@@ -63,18 +49,13 @@ public class LiteApple extends Spider {
         headers.put("Range", "bytes=0-");
         headers.put("version", "XPGBOX com.phoenix.tv1.3.3");
         headers.put("Icy-MetaData", "1");
-        
         headers.put("screenx", "1280");
-
-        // 生成当前 Unix 时间戳（单位：秒）
-        //String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         headers.put("hash", "60b2");
         headers.put("timestamp", "1753708324");
 
         headers.put("token", "RXQbgQKl3QkFZkIPGwGvH5kofvCokkkn/a893wC2IId7HQFmy0Eh24osz555X12xGVFxQLTaGuBqU/Y7KU4lStp4UjR7giPxdwoTOsU6R3oc4yZZTQc/yTKh1mH3ckZhx6VsQCEoFf6q");
         headers.put("screeny", "720");
         headers.put("User-Agent", "Lvaf/58.12.100");
-        //headers.put("Host", "c.xpgtv.net");
         headers.put("Connection", "Keep-Alive");
         return headers;
     }
@@ -285,7 +266,6 @@ public class LiteApple extends Spider {
             String url = siteUrl + "api.php/v3.vod/androiddetail2?vod_id=" + ids.get(0);
             
             String content = OkHttp.string(url, getHeaders(url, ids.get(0)));
-            //String content = OkHttp.string(url, getCustomHeaders());
             JSONObject dataObject = new JSONObject(content);
             JSONObject vObj = dataObject.getJSONObject("data");
             JSONObject result = new JSONObject();
@@ -329,7 +309,6 @@ public class LiteApple extends Spider {
             if (!id.endsWith(".m3u8")) id += ".m3u8";
             JSONObject result = new JSONObject();
             result.put("parse", 0);
-            //result.put("header", new JSONObject(getHeaders(id, null)).toString());
             result.put("header", new JSONObject(getCustomHeaders()).toString());
             result.put("playUrl", "");
             result.put("url", id);
