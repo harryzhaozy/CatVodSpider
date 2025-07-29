@@ -324,8 +324,9 @@ public class LiteApple extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-       /*
+       
         try {
+            if (!id.endsWith(".m3u8")) id += ".m3u8";
             JSONObject result = new JSONObject();
             result.put("parse", 0);
             //result.put("header", new JSONObject(getHeaders(id, null)).toString());
@@ -337,47 +338,8 @@ public class LiteApple extends Spider {
             SpiderDebug.log(e);
         }
         return "";
-        */
-        try {
-            String url = id;
-            if (!url.endsWith(".m3u8")) url += ".m3u8";
-
-            Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent","okhttp/3.12.11");
-            headers.put("Connection", "Keep-Alive");
-            headers.put("Accept-Language", "zh-CN,zh;q=0.8");
-            headers.put("user_id", "XPGBOX");
-            headers.put("token2", "XFxIummRrngadHB4TCzeUaleebTX10Vl/ftCvGLPeI5tN2Y/liZ5tY5e4t8=");
-            headers.put("version", "XPGBOX com.phoenix.tv1.3.3");
-            headers.put("hash", "0d51");
-            headers.put("screenx", "2331");
-            headers.put("token", "SH4EsXSBhi1ybXp3XQypB5lsfLfbzSpim+hOlmv7IIZ9Kkwoykkh1Y0r9dAKGx/0Smx2VqjAKdYKQuImbjN/Vuc2GWY/wnqwKk1McYhZES5fuT4fGlR0n2ii1nKqbBk8ketLdT0CXrXr8kcZVTdW77fUVG8S5jaTrSrsN/HnCiT4XT1GEkdnV0pqcr5wQL7NV2HHkG/e");
-            headers.put("timestamp", "1731848468");
-            headers.put("screeny", "1121");
-
-            String m3u8 = OkHttp.string(url, headers);
-            if (m3u8.contains("key")) {
-                String[] lines = m3u8.split("\n");
-                String prefix = url.substring(0, url.indexOf("m3u8"));
-                for (int i = 3; i < lines.length; i++) {
-                    if (lines[i].contains("key")) {
-                        lines[i] = lines[i].replace("/m3u8key", prefix + "m3u8key");
-                    }
-                }
-                m3u8 = String.join("\n", lines);
-            }
-
-            JSONObject result = new JSONObject();
-            result.put("parse", 0);
-            result.put("type", "m3u8");
-            result.put("playUrl", "");
-            result.put("url", m3u8);
-            return result.toString();
-
-            } catch (Exception e) {
-                SpiderDebug.log(e);
-            return "";
-        }  
+        
+         
     }
 
     @Override
