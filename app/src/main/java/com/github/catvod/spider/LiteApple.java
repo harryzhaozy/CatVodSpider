@@ -31,7 +31,7 @@ import com.github.catvod.utils.LogUtils;
 
 public class LiteApple extends Spider {
     private static final String siteUrl = "http://item.xpgtv.com/";
-    private final String playHost = "http://c.xpgtv.net/m3u8/";
+    private static final String playHost = "http://c.xpgtv.net/m3u8/";
     
     private HashMap<String, String> getHeaders(String url, String data) {
         HashMap<String, String> headers = new HashMap<>();
