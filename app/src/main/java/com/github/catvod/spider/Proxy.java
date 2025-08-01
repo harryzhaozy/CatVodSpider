@@ -34,7 +34,7 @@ public class Proxy {
 
     public static void init() {
         try {
-            Class<?> clz = Class.forName("com.github.catvod.Proxy");
+            Class<?> clz = Class.forName("com.github.catvod.spider.Proxy");
             port = (int) clz.getMethod("getPort").invoke(null);
             method = clz.getMethod("getUrl", boolean.class);
             SpiderDebug.log("本地代理端口:" + port);
