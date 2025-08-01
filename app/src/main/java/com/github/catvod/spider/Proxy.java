@@ -11,7 +11,7 @@ import java.util.Map;
 public class Proxy {
 
     private static Method method;
-    private static int port;
+    private static int port=9978;
 
     public static Object[] proxy(Map<String, String> params) throws Exception {
         SpiderDebug.log("proxy传入参数:" + params);
