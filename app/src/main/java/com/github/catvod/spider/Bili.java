@@ -150,16 +150,18 @@ public class Bili extends Spider {
         SpiderDebug.log("detailContent api:" + api);
         json = OkHttp.string(api, getHeader());
         Data play = Resp.objectFrom(json).getData();
-         SpiderDebug.log("detailContent api返回值:" + play);
-         SpiderDebug.log("detailContent api返回值的getAcceptQuality-size:" + play.getAcceptQuality().size());
+        SpiderDebug.log("detailContent api返回值:" + play);
+        SpiderDebug.log("detailContent api返回值的getAcceptQuality-size:" + play.getAcceptQuality().size());
         for (int i = 0; i < play.getAcceptQuality().size(); i++) {
             int qn = play.getAcceptQuality().get(i);
             if (!login && qn > 32) continue;
             if (!isVip && qn > 80) continue;
             acceptQuality.add(play.getAcceptQuality().get(i));
             acceptDesc.add(play.getAcceptDescription().get(i));
+            
         }
-
+        SpiderDebug.log("detailContent acceptQuality:" + acceptQuality);
+        SpiderDebug.log("detailContent acceptDesc:" + acceptDesc);
         List<String> episode = new ArrayList<>();
         LinkedHashMap<String, String> flag = new LinkedHashMap<>();
         for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
