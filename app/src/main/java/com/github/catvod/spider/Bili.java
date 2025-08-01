@@ -149,6 +149,8 @@ public class Bili extends Spider {
         api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
         json = OkHttp.string(api, getHeader());
         Data play = Resp.objectFrom(json).getData();
+         SpiderDebug.log("detailContent api返回值:" + play);
+         SpiderDebug.log("detailContent api返回值的getAcceptQuality-size:" + play.getAcceptQuality().size());
         for (int i = 0; i < play.getAcceptQuality().size(); i++) {
             int qn = play.getAcceptQuality().get(i);
             if (!login && qn > 32) continue;
