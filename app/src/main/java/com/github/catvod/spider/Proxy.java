@@ -37,7 +37,7 @@ public class Proxy {
             Class<?> clz = Class.forName("com.github.catvod.spider.Proxy");
             port = (int) clz.getMethod("getPort").invoke(null);
             method = clz.getMethod("getUrl", boolean.class);
-            SpiderDebug.log("本地代理端口:" + port);
+            SpiderDebug.log("初始化本地代理端口:" + port);
         } catch (Throwable e) {
             findPort();
         }
@@ -63,8 +63,9 @@ public class Proxy {
         if (port > 0) return;
         for (int p = 8964; p < 9999; p++) {
             if ("ok".equals(OkHttp.string("http://127.0.0.1:" + p + "/proxy?do=ck", null))) {
-                SpiderDebug.log("本地代理端口:" + p);
+                
                 port = p;
+                SpiderDebug.log("本地代理端口findPort:" + port);
                 break;
             }
         }
