@@ -21,7 +21,7 @@ import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-
+import com.github.catvod.crawler.SpiderDebug;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
@@ -161,7 +161,7 @@ public class Bili extends Spider {
         LinkedHashMap<String, String> flag = new LinkedHashMap<>();
         for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         flag.put("B站", TextUtils.join("#", episode));
-
+        SpiderDebug.log("detailContent B站 flag:" + episode);
         episode = new ArrayList<>();
         api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
         json = OkHttp.string(api, getHeader());
@@ -174,6 +174,7 @@ public class Bili extends Spider {
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
+        SpiderDebug.log("detailContent返回值:" + Result.string(vod));
         return Result.string(vod);
     }
 
@@ -200,6 +201,7 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add("proxy://do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
+          SpiderDebug.log("playerContent的url值:" + url);
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
@@ -220,6 +222,7 @@ public class Bili extends Spider {
         result[0] = 200;
         result[1] = "application/dash+xml";
         result[2] = new ByteArrayInputStream(mpd.getBytes());
+        SpiderDebug.log("proxy返回值:" + result);
         return result;
     }
 
