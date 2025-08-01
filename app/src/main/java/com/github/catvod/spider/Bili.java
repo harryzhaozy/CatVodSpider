@@ -147,6 +147,7 @@ public class Bili extends Spider {
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
         api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
+        SpiderDebug.log("detailContent api:" + api);
         json = OkHttp.string(api, getHeader());
         Data play = Resp.objectFrom(json).getData();
          SpiderDebug.log("detailContent api返回值:" + play);
