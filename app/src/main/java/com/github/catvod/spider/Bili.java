@@ -22,6 +22,7 @@ import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.github.catvod.crawler.SpiderDebug;
+import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
