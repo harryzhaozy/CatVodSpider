@@ -79,7 +79,7 @@ public class Bili extends Spider {
         setCookie();
     }
 
-    @Override
+   
     public String parse(String url, JSONObject json) throws Exception {
         if (url.startsWith("proxy://")) {
             String realUrl = "http://127.0.0.1:9978/proxy?" + url.substring(9);
