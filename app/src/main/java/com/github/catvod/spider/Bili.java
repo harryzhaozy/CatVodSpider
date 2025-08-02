@@ -21,7 +21,7 @@ import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-
+import com.github.catvod.crawler.SpiderDebug;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
@@ -174,6 +174,7 @@ public class Bili extends Spider {
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
+        
         return Result.string(vod);
     }
 
