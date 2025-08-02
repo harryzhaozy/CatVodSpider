@@ -79,6 +79,18 @@ public class Bili extends Spider {
     }
 
     @Override
+    public String parse(String url, JSONObject json) throws Exception {
+        if (url.startsWith("proxy://")) {
+            String realUrl = "http://127.0.0.1:9978/proxy?" + url.substring(9);
+            JSONObject result = new JSONObject();
+            result.put("parse", 0);
+            result.put("playUrl", realUrl);
+            return result.toString();
+        }
+        return "";
+    }
+    
+    @Override
     public String homeContent(boolean filter) throws Exception {
         if (extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
         List<Class> classes = new ArrayList<>();
