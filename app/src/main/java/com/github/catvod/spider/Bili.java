@@ -174,7 +174,8 @@ public class Bili extends Spider {
 
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        
+        SpiderDebug.log("TVBox vod_name=" + vod.getVodName());
+        SpiderDebug.log("TVBox vod_play_url=" + vod.getVodPlayUrl());
         return Result.string(vod);
     }
 
