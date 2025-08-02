@@ -202,6 +202,8 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add(Proxy.getUrl() + "?do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
+        SpiderDebug.log("TVBox  playerContent url" + url);
+        SpiderDebug.log("TVBox  playerContent Result:" +Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
