@@ -171,11 +171,12 @@ public class Bili extends Spider {
             episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         }
         flag.put("相关", TextUtils.join("#", episode));
-
+        String vod_play_from=TextUtils.join("$$$", flag.keySet());
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        SpiderDebug.log("TVBox vod_name=" + vod.getVodName());
+        SpiderDebug.log("TVBox VodContent=" + vod.getVodContent());
         SpiderDebug.log("TVBox vod_play_url=" + vod.getVodPlayUrl());
+         SpiderDebug.log("TVBox VodPlayFrom=" + vod_play_from);
         return Result.string(vod);
     }
 
