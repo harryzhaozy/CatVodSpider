@@ -33,12 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import android.os.Build;
-import javax.net.ssl.HttpsURLConnection;
-import java.security.SecureRandom;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+
 
 /**
  * @author ColaMint & FongMi & 唐三
@@ -60,17 +55,7 @@ public class Bili extends Spider {
         if (cookie != null) headers.put("cookie", cookie);
         return headers;
     }
-    private void enableTls12() {
-        try {
-            if (Build.VERSION.SDK_INT >= 16 && Build.VERSION.SDK_INT < 22) {
-                SSLContext sc = SSLContext.getInstance("TLSv1.2");
-                sc.init(null, null, new SecureRandom());
-                HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+    
     private void setCookie() {
         cookie = extend.get("cookie").getAsString();
         if (cookie.startsWith("http")) cookie = OkHttp.string(cookie).trim();
@@ -91,7 +76,7 @@ public class Bili extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        enableTls12();
+        
         this.extend = Json.safeObject(extend);
         setCookie();
     }
@@ -116,6 +101,7 @@ public class Bili extends Spider {
         Resp resp = Resp.objectFrom(json);
         List<Vod> list = new ArrayList<>();
         for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList())) list.add(item.getVod());
+        SpiderDebug.log("TVBox homeVideoContent=" + Result.string(list));
         return Result.string(list);
     }
 
