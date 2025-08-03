@@ -32,6 +32,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * @author ColaMint & FongMi & 唐三
@@ -53,7 +57,17 @@ public class Bili extends Spider {
         if (cookie != null) headers.put("cookie", cookie);
         return headers;
     }
-
+    private void enableTls12() {
+        try {
+            if (Build.VERSION.SDK_INT >= 16 && Build.VERSION.SDK_INT < 22) {
+                SSLContext sc = SSLContext.getInstance("TLSv1.2");
+                sc.init(null, null, new SecureRandom());
+                HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     private void setCookie() {
         cookie = extend.get("cookie").getAsString();
         if (cookie.startsWith("http")) cookie = OkHttp.string(cookie).trim();
@@ -74,6 +88,7 @@ public class Bili extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
+        enableTls12();
         this.extend = Json.safeObject(extend);
         setCookie();
     }
