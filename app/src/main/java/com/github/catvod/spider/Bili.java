@@ -35,6 +35,7 @@ import java.util.Map;
 
 import android.os.Build;
 import javax.net.ssl.HttpsURLConnection;
+import java.security.SecureRandom;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
