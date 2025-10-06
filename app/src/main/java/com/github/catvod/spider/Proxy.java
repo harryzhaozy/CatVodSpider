@@ -30,16 +30,16 @@ public class Proxy extends Spider {
         }
     }
 
-    public static void init() {
-        try {
-            Class<?> clz = Class.forName("com.github.catvod.Proxy");
-            port = (int) clz.getMethod("getPort").invoke(null);
-            method = clz.getMethod("getUrl", boolean.class);
-            SpiderDebug.log("本地代理端口:" + port);
-        } catch (Throwable e) {
-            findPort();
-        }
-    }
+   // public static void init() {
+   //     try {
+   //         Class<?> clz = Class.forName("com.github.catvod.Proxy");
+   //         port = (int) clz.getMethod("getPort").invoke(null);
+   //         method = clz.getMethod("getUrl", boolean.class);
+   //         SpiderDebug.log("本地代理端口:" + port);
+   //     } catch (Throwable e) {
+   //         findPort();
+   //     }
+   // }
 
     public static int getPort() {
         return port;
