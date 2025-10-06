@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-public class Proxy {
+public class Proxy extends Spider {
 
     private static Method method;
     private static int port;
