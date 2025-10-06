@@ -40,7 +40,8 @@ public class Jianpian extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        this.extend = extend;
+        //this.extend = extend;
+        super.init(context, extend);
         JsonObject domains = new Gson().fromJson(OkHttp.string("https://dns.alidns.com/resolve?name=swrdsfeiujo25sw.cc&type=TXT"), JsonObject.class);
         String parts = domains.getAsJsonArray("Answer").get(0).getAsJsonObject().get("data").getAsString();
         parts = parts.replace("\"", "");
