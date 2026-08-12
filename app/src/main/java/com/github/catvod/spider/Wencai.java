@@ -77,14 +77,13 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 自定义 HTTP 请求方法：保证 timestamp 强一致性与正确签名
+     * 自定义 HTTP 请求方法：严格只保留正常请求所需的 Header
      */
     private String fetch(String url, String paramStr) {
         try {
-            // 核心：统一全局唯一时间戳
             String timestamp = String.valueOf(System.currentTimeMillis());
 
-            // 构建待签名的所有 key-value 组合
+            // 拼接签名串
             String rawParams;
             if (paramStr == null || paramStr.trim().isEmpty()) {
                 rawParams = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
@@ -92,21 +91,18 @@ public class Wencai extends Spider {
                 rawParams = paramStr + "&deviceid=" + DEVICE_ID + "&t=" + timestamp;
             }
 
-            // 按 ASCII 字母字典序排序 (例如: deviceid=...&keyword=...&pageNum=...&pageSize=...&t=...)
+            // 按 ASCII 字典序排序并计算 SHA-1
             String sortedSignStr = sortQueryParams(rawParams);
-
-            // 计算 SHA-1
             String sign = sha1(sortedSignStr);
 
             HashMap<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", "okhttp/3.12.13");
+            // 严格对齐正常抓包的 6 个 Header 字段
             headers.put("Host", "www.hkybqufgh.com");
-            headers.put("Accept", "application/json, text/plain, */*");
-            headers.put("Accept-Language", "zh-CN,zh;q=0.9");
             headers.put("t", timestamp);
             headers.put("sign", sign);
             headers.put("deviceid", DEVICE_ID);
-            headers.put("Accept-Encoding", "gzip");
+            headers.put("accept-encoding", "gzip");
+            headers.put("user-agent", "okhttp/3.12.13");
 
             if (!wafCookie.isEmpty()) {
                 headers.put("Cookie", wafCookie);
