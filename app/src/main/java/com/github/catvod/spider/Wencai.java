@@ -102,11 +102,11 @@ public class Wencai extends Spider {
             }
 
             // 2. 排序参数串
-            String sortedParams = sortQueryParams(rawParams);
+            //String sortedParams = sortQueryParams(rawParams);
 
             // 3. 计算 SHA-1(MD5(e))
-            String signVal = sign(sortedParams);
-
+            //String signVal = sign(sortedParams);
+            String signVal =sign(rawParams);
             // 4. 构建与抓包一致的请求头
             HashMap<String, String> headers = new HashMap<>();
             headers.put("Host", "www.hkybqufgh.com");
