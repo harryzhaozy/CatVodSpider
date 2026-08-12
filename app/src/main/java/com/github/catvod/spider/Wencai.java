@@ -1,7 +1,6 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
-
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
@@ -12,27 +11,23 @@ import org.json.JSONObject;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * 完整适配 WAF Cookie 与动态 SHA-1 强签名的 Wencai 爬虫类
- */
 public class Wencai extends Spider {
 
-    private static final String HOST = "https://www.hkybqufgh.com";
+    private static final String SITE_URL = "https://www.hkybqufgh.com";
     private static final String DEVICE_ID = "c684e808-4922-45e9-b158-da5c48765415";
-
-    // 动态存储防护 Cookie
     private static String wafCookie = "";
 
     @Override
     public void init(Context context, String extend) {
+        super.init(context, extend);
         try {
-            super.init(context, extend);
-        } catch (Exception ignored) {
-        }
-        try {
+            // 预热请求获取 WAF Cookie
             homeContent(false);
         } catch (Throwable t) {
             SpiderDebug.log(t);
@@ -40,56 +35,62 @@ public class Wencai extends Spider {
     }
 
     /**
-     * SHA-1 签名计算 (强制小写)
+     * 嵌套哈希签名算法：SHA-1(MD5(e))
      */
-    public static String sha1(String str) {
-    try {
-        byte[] bytes = java.security.MessageDigest
-                .getInstance("SHA-1")
-                .digest(str.getBytes());
-
-        StringBuilder sb = new StringBuilder();
-
-        for (byte b : bytes) {
-            String hex = Integer.toHexString(b & 0xFF);
-
-            if (hex.length() == 1) {
-                sb.append('0');
+    public static String sign(String e) {
+        try {
+            // 1. 计算 MD5 并转为 32 位小写 Hex
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            byte[] md5Bytes = md5.digest(e.getBytes(StandardCharsets.UTF_8));
+            StringBuilder md5Hex = new StringBuilder();
+            for (byte b : md5Bytes) {
+                md5Hex.append(String.format("%02x", b & 0xff));
             }
 
-            sb.append(hex);
+            // 2. 对 MD5 的字符串结果计算 SHA-1 并转为 40 位小写 Hex
+            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            byte[] sha1Bytes = sha1.digest(md5Hex.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder();
+            for (byte b : sha1Bytes) {
+                result.append(String.format("%02x", b & 0xff));
+            }
+
+            return result.toString();
+        } catch (Exception ex) {
+            SpiderDebug.log(ex);
+            return "";
         }
-
-        return sb.toString();
-
-    } catch (java.security.NoSuchAlgorithmException e) {
-        return null;
     }
-}
 
     /**
-     * 严格按 ASCII 字典序重排所有 key=value 键值对
+     * 参数按 ASCII 字典序排序
      */
     private String sortQueryParams(String queryStr) {
-        if (queryStr == null || queryStr.trim().isEmpty()) return "";
+        if (queryStr == null || queryStr.trim().isEmpty()) {
+            return "";
+        }
         String[] pairs = queryStr.split("&");
-        java.util.Arrays.sort(pairs);
+        List<String> pairList = new ArrayList<>(Arrays.asList(pairs));
+        Collections.sort(pairList);
+
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < pairs.length; i++) {
-            if (i > 0) sb.append("&");
-            sb.append(pairs[i]);
+        for (int i = 0; i < pairList.size(); i++) {
+            sb.append(pairList.get(i));
+            if (i < pairList.size() - 1) {
+                sb.append("&");
+            }
         }
         return sb.toString();
     }
 
     /**
-     * 自定义 HTTP 请求方法：严格只保留正常请求所需的 Header
+     * HTTP 请求封装：精简 Header + 嵌套 Hash 签名
      */
     private String fetch(String url, String paramStr) {
         try {
             String timestamp = String.valueOf(System.currentTimeMillis());
 
-            // 拼接签名串
+            // 1. 拼接待签名明文串
             String rawParams;
             if (paramStr == null || paramStr.trim().isEmpty()) {
                 rawParams = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
@@ -97,15 +98,17 @@ public class Wencai extends Spider {
                 rawParams = paramStr + "&deviceid=" + DEVICE_ID + "&t=" + timestamp;
             }
 
-            // 按 ASCII 字典序排序并计算 SHA-1
-            String sortedSignStr = sortQueryParams(rawParams);
-            String sign = sha1(sortedSignStr);
+            // 2. 排序参数串
+            String sortedParams = sortQueryParams(rawParams);
 
+            // 3. 计算 SHA-1(MD5(e))
+            String signVal = sign(sortedParams);
+
+            // 4. 构建与抓包一致的请求头
             HashMap<String, String> headers = new HashMap<>();
-            
             headers.put("Host", "www.hkybqufgh.com");
             headers.put("t", timestamp);
-            headers.put("sign", sign);
+            headers.put("sign", signVal);
             headers.put("deviceid", DEVICE_ID);
             headers.put("accept-encoding", "gzip");
             headers.put("user-agent", "okhttp/3.12.13");
@@ -115,291 +118,123 @@ public class Wencai extends Spider {
             }
 
             return OkHttp.string(url, headers);
-        } catch (Exception e) {
-            SpiderDebug.log(e);
+        } catch (Exception ex) {
+            SpiderDebug.log(ex);
         }
         return "";
     }
 
-    /**
-     * 1. 首页推荐 / 热门搜索 (homeContent)
-     */
     @Override
-    public String homeContent(boolean filter) throws Exception {
+    public String homeContent(boolean filter) {
         try {
-            String url = HOST + "/api/mw-movie/anonymous/home/hotSearch";
+            String url = SITE_URL + "/api/mw-movie/anonymous/home/hotSearch";
             String jsonStr = fetch(url, "");
+            
+            JSONObject response = new JSONObject(jsonStr);
+            JSONArray list = response.optJSONArray("data");
 
-            JSONObject responseJson = new JSONObject(jsonStr);
-            JSONArray vodList = new JSONArray();
-
-            if (responseJson.optInt("code") == 200) {
-                JSONArray data = responseJson.optJSONArray("data");
-                if (data != null) {
-                    for (int i = 0; i < data.length(); i++) {
-                        JSONObject item = data.getJSONObject(i);
-                        JSONObject vod = new JSONObject();
-                        vod.put("vod_id", item.optString("vodId"));
-                        vod.put("vod_name", item.optString("vodName"));
-                        vod.put("vod_pic", item.optString("vodPic"));
-                        vod.put("vod_remarks", item.optString("vodRemarks"));
-                        vodList.put(vod);
-                    }
+            List<JSONObject> vodList = new ArrayList<>();
+            if (list != null) {
+                for (int i = 0; i < list.length(); i++) {
+                    JSONObject item = list.getJSONObject(i);
+                    JSONObject vod = new JSONObject();
+                    vod.put("vod_id", item.optString("vodId"));
+                    vod.put("vod_name", item.optString("vodName"));
+                    vod.put("vod_pic", item.optString("vodPic"));
+                    vod.put("vod_remarks", item.optString("vodRemarks"));
+                    vodList.add(vod);
                 }
             }
 
             JSONObject result = new JSONObject();
-            result.put("list", vodList);
+            result.put("list", new JSONArray(vodList));
             return result.toString();
-
         } catch (Exception e) {
             SpiderDebug.log(e);
         }
         return "";
     }
 
-    /**
-     * 2. 分类列表 (categoryContent)
-     */
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+    public String searchContent(String key, boolean quick) {
         try {
-            String area = extend != null && extend.containsKey("area") ? extend.get("area") : "";
-            String year = extend != null && extend.containsKey("year") ? extend.get("year") : "";
-
-            String typeKey = "type1";
-            if (extend != null && extend.containsKey("type") && !extend.get("type").isEmpty()) {
-                typeKey = "type";
-            }
-
-            String queryStr = typeKey + "=" + tid + "&pageNum=" + pg + "&area=" + URLEncoder.encode(area, "UTF-8") + "&year=" + URLEncoder.encode(year, "UTF-8");
-            String url = HOST + "/api/mw-movie/anonymous/video/list?" + queryStr;
-
-            String paramStr = "area=" + area + "&pageNum=" + pg + "&" + typeKey + "=" + tid + "&year=" + year;
-
+            String paramStr = "keyword=" + URLEncoder.encode(key, "UTF-8");
+            String url = SITE_URL + "/api/mw-movie/anonymous/video/search?" + paramStr;
             String jsonStr = fetch(url, paramStr);
-            JSONObject responseJson = new JSONObject(jsonStr);
 
-            JSONObject result = new JSONObject();
-            JSONArray vodList = new JSONArray();
+            JSONObject response = new JSONObject(jsonStr);
+            JSONArray list = response.optJSONArray("data");
 
-            if (responseJson.optInt("code") == 200) {
-                JSONObject dataObj = responseJson.optJSONObject("data");
-                if (dataObj != null) {
-                    result.put("page", dataObj.optInt("pageNum", 1));
-                    result.put("pagecount", dataObj.optInt("totalPage", 1));
-                    result.put("limit", dataObj.optInt("pageSize", 48));
-                    result.put("total", dataObj.optInt("totalCount", 0));
-
-                    JSONArray list = dataObj.optJSONArray("list");
-                    if (list != null) {
-                        for (int i = 0; i < list.length(); i++) {
-                            JSONObject item = list.getJSONObject(i);
-                            JSONObject vod = new JSONObject();
-                            vod.put("vod_id", item.optString("vodId"));
-
-                            String vodName = item.optString("vodName");
-                            vod.put("vod_name", vodName.isEmpty() ? "未命名视频" : vodName);
-                            vod.put("vod_pic", item.optString("vodPic"));
-
-                            String remarks = item.optString("vodRemarks");
-                            if (remarks.isEmpty()) {
-                                remarks = item.optString("vodVersion");
-                            }
-                            vod.put("vod_remarks", remarks);
-
-                            vodList.put(vod);
-                        }
-                    }
+            List<JSONObject> vodList = new ArrayList<>();
+            if (list != null) {
+                for (int i = 0; i < list.length(); i++) {
+                    JSONObject item = list.getJSONObject(i);
+                    JSONObject vod = new JSONObject();
+                    vod.put("vod_id", item.optString("vodId"));
+                    vod.put("vod_name", item.optString("vodName"));
+                    vod.put("vod_pic", item.optString("vodPic"));
+                    vod.put("vod_remarks", item.optString("vodRemarks"));
+                    vodList.add(vod);
                 }
             }
-            result.put("list", vodList);
-            return result.toString();
 
+            JSONObject result = new JSONObject();
+            result.put("list", new JSONArray(vodList));
+            return result.toString();
         } catch (Exception e) {
             SpiderDebug.log(e);
         }
         return "";
     }
 
-    /**
-     * 3. 详情页 (detailContent)
-     */
     @Override
-    public String detailContent(List<String> ids) throws Exception {
+    public String detailContent(List<String> ids) {
         try {
-            if (ids == null || ids.isEmpty()) return "";
-            String vodId = ids.get(0);
-
-            String url = HOST + "/api/mw-movie/anonymous/video/detail?id=" + vodId;
-            String paramStr = "id=" + vodId;
-
+            String id = ids.get(0);
+            String paramStr = "id=" + id;
+            String url = SITE_URL + "/api/mw-movie/anonymous/video/detail?" + paramStr;
             String jsonStr = fetch(url, paramStr);
-            JSONObject responseJson = new JSONObject(jsonStr);
-            JSONObject result = new JSONObject();
 
-            if (responseJson.optInt("code") == 200) {
-                JSONObject detail = responseJson.optJSONObject("data");
-                if (detail != null) {
-                    JSONObject vodDetail = new JSONObject();
-                    vodDetail.put("vod_id", detail.optString("vodId"));
-                    vodDetail.put("vod_name", detail.optString("vodName"));
-                    vodDetail.put("vod_pic", detail.optString("vodPic"));
-                    vodDetail.put("type_name", detail.optString("typeName"));
-                    vodDetail.put("vod_year", detail.optString("vodYear"));
-                    vodDetail.put("vod_area", detail.optString("vodArea"));
-                    vodDetail.put("vod_remarks", detail.optString("vodRemarks"));
-                    vodDetail.put("vod_actor", detail.optString("vodActor"));
-                    vodDetail.put("vod_director", detail.optString("vodDirector"));
+            JSONObject response = new JSONObject(jsonStr);
+            JSONObject data = response.optJSONObject("data");
 
-                    String content = detail.optString("vodContent").replaceAll("<[^>]*>", "");
-                    vodDetail.put("vod_content", content);
+            if (data != null) {
+                JSONObject vod = new JSONObject();
+                vod.put("vod_id", data.optString("vodId"));
+                vod.put("vod_name", data.optString("vodName"));
+                vod.put("vod_pic", data.optString("vodPic"));
+                vod.put("vod_remarks", data.optString("vodRemarks"));
+                vod.put("vod_content", data.optString("vodContent"));
 
-                    JSONArray episodeList = detail.optJSONArray("episodeList");
-                    if (episodeList != null && episodeList.length() > 0) {
-                        StringBuilder playUrlSb = new StringBuilder();
-                        for (int i = 0; i < episodeList.length(); i++) {
-                            JSONObject ep = episodeList.getJSONObject(i);
-                            String name = ep.optString("name", "播放");
-                            String nid = ep.optString("nid");
-
-                            if (i > 0) playUrlSb.append("#");
-                            playUrlSb.append(name).append("$").append(vodId).append("#").append(nid);
-                        }
-                        vodDetail.put("vod_play_from", "默认线路");
-                        vodDetail.put("vod_play_url", playUrlSb.toString());
-                    }
-
-                    JSONArray resultList = new JSONArray();
-                    resultList.put(vodDetail);
-                    result.put("list", resultList);
-                }
+                JSONObject result = new JSONObject();
+                List<JSONObject> list = new ArrayList<>();
+                list.add(vod);
+                result.put("list", new JSONArray(list));
+                return result.toString();
             }
-            return result.toString();
-
         } catch (Exception e) {
             SpiderDebug.log(e);
         }
         return "";
     }
 
-    /**
-     * 4. 搜索 (searchContent)
-     */
     @Override
-    public String searchContent(String key, boolean quick) throws Exception {
-        return searchContent(key, quick, "1");
-    }
-
-    @Override
-    public String searchContent(String key, boolean quick, String pg) throws Exception {
+    public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            String pageSize = "8";
-
-            String queryStr = "keyword=" + URLEncoder.encode(key, "UTF-8") + "&pageNum=" + pg + "&pageSize=" + pageSize;
-            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + queryStr;
-
-            String paramStr = "keyword=" + key + "&pageNum=" + pg + "&pageSize=" + pageSize;
-
+            String paramStr = "id=" + id;
+            String url = SITE_URL + "/api/mw-movie/anonymous/video/playUrl?" + paramStr;
             String jsonStr = fetch(url, paramStr);
-            JSONObject responseJson = new JSONObject(jsonStr);
 
-            JSONObject result = new JSONObject();
-            JSONArray vodList = new JSONArray();
+            JSONObject response = new JSONObject(jsonStr);
+            JSONObject data = response.optJSONObject("data");
 
-            if (responseJson.optInt("code") == 200) {
-                JSONObject dataObj = responseJson.optJSONObject("data");
-                if (dataObj != null) {
-                    JSONObject resultObj = dataObj.optJSONObject("result");
-                    if (resultObj != null) {
-                        result.put("page", resultObj.optInt("pageNum", 1));
-                        result.put("pagecount", resultObj.optInt("totalPage", 1));
-                        result.put("limit", resultObj.optInt("pageSize", 8));
-                        result.put("total", resultObj.optInt("totalCount", 0));
-
-                        JSONArray list = resultObj.optJSONArray("list");
-                        if (list != null) {
-                            for (int i = 0; i < list.length(); i++) {
-                                JSONObject item = list.getJSONObject(i);
-                                JSONObject vod = new JSONObject();
-                                vod.put("vod_id", item.optString("vodId"));
-                                vod.put("vod_name", item.optString("vodName"));
-                                vod.put("vod_pic", item.optString("vodPic"));
-
-                                String remarks = item.optString("vodRemarks");
-                                if (remarks.isEmpty()) {
-                                    remarks = item.optString("vodVersion");
-                                }
-                                vod.put("vod_remarks", remarks);
-
-                                vodList.put(vod);
-                            }
-                        }
-                    }
-                }
-            }
-            result.put("list", vodList);
-            return result.toString();
-
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
-    }
-
-    /**
-     * 5. 播放解析 (playerContent)
-     */
-    @Override
-    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        try {
-            String[] parts = id.split("#");
-            if (parts.length < 2) return "";
-
-            String vodId = parts[0];
-            String nid = parts[1];
-
-            String queryStr = "clientType=3&id=" + vodId + "&nid=" + nid;
-            String url = HOST + "/api/mw-movie/anonymous/v2/video/episode/url?" + queryStr;
-
-            String paramStr = "clientType=3&id=" + vodId + "&nid=" + nid;
-
-            String jsonStr = fetch(url, paramStr);
-            JSONObject responseJson = new JSONObject(jsonStr);
-
-            if (responseJson.optInt("code") == 200) {
-                JSONObject dataObj = responseJson.optJSONObject("data");
-                if (dataObj != null) {
-                    JSONArray list = dataObj.optJSONArray("list");
-                    if (list != null && list.length() > 0) {
-                        String targetUrl = "";
-
-                        for (int i = 0; i < list.length(); i++) {
-                            JSONObject stream = list.getJSONObject(i);
-                            if (stream.optBoolean("flag", false)) {
-                                targetUrl = stream.optString("url");
-                                break;
-                            }
-                        }
-
-                        if (targetUrl.isEmpty()) {
-                            targetUrl = list.getJSONObject(0).optString("url");
-                        }
-
-                        JSONObject result = new JSONObject();
-                        result.put("parse", 0);
-                        result.put("url", targetUrl);
-
-                        JSONObject playHeaders = new JSONObject();
-                        playHeaders.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36");
-                        playHeaders.put("Origin", "https://www.ghw9zwp5.com");
-                        playHeaders.put("Referer", "https://www.ghw9zwp5.com/");
-
-                        result.put("header", playHeaders.toString());
-
-                        return result.toString();
-                    }
-                }
+            if (data != null) {
+                String playUrl = data.optString("playUrl");
+                JSONObject result = new JSONObject();
+                result.put("parse", 0);
+                result.put("playUrl", "");
+                result.put("url", playUrl);
+                return result.toString();
             }
         } catch (Exception e) {
             SpiderDebug.log(e);
