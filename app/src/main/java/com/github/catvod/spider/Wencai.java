@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * 类名：Wencai
+ * 完整适配自动强签名校验的 Wencai Spider 类
  */
 public class Wencai extends Spider {
 
@@ -22,21 +22,7 @@ public class Wencai extends Spider {
     private static final String DEVICE_ID = "c684e808-4922-45e9-b158-da5c48765415";
 
     /**
-     * 基础 HTTP Request Headers
-     */
-    protected HashMap<String, String> getHeaders(String timestamp, String sign) {
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "okhttp/3.12.13");
-        headers.put("Host", "www.hkybqufgh.com");
-        headers.put("t", timestamp);
-        headers.put("sign", sign);
-        headers.put("deviceid", DEVICE_ID);
-        headers.put("Accept-Encoding", "gzip");
-        return headers;
-    }
-
-    /**
-     * SHA-1 签名计算
+     * SHA-1 签名计算 (强制小写)
      */
     public static String sha1(String str) {
         try {
@@ -50,7 +36,7 @@ public class Wencai extends Spider {
                 }
                 sb.append(hex);
             }
-            return sb.toString();
+            return sb.toString().toLowerCase();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -58,20 +44,38 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 首页推荐 / 热门搜索 (homeContent)
+     * 自动化 Header 与签名生成（防时间戳不同步）
      */
- 
+    protected HashMap<String, String> getHeaders(String paramStr) {
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        
+        String signStr;
+        if (paramStr == null || paramStr.isEmpty()) {
+            signStr = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
+        } else {
+            signStr = paramStr + "&deviceid=" + DEVICE_ID + "&t=" + timestamp;
+        }
+
+        String sign = sha1(signStr);
+
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("User-Agent", "okhttp/3.12.13");
+        headers.put("Host", "www.hkybqufgh.com");
+        headers.put("t", timestamp);
+        headers.put("sign", sign);
+        headers.put("deviceid", DEVICE_ID);
+        headers.put("Accept-Encoding", "gzip");
+        return headers;
+    }
+
+    /**
+     * 1. 首页推荐 / 热门搜索 (homeContent)
+     */
     @Override
     public String homeContent(boolean filter) throws Exception {
         try {
-            String time = String.valueOf(System.currentTimeMillis());
-            
-            // 严格按字典序 ASCII 拼接签名串：deviceid=...&t=...
-            String signStr = "deviceid=" + DEVICE_ID + "&t=" + time;
-            String sign = sha1(signStr);
-
             String url = HOST + "/api/mw-movie/anonymous/home/hotSearch";
-            String jsonStr = OkHttp.string(url, getHeaders(time, sign));
+            String jsonStr = OkHttp.string(url, getHeaders(""));
 
             JSONObject responseJson = new JSONObject(jsonStr);
             JSONArray vodList = new JSONArray();
@@ -89,8 +93,6 @@ public class Wencai extends Spider {
                         vodList.put(vod);
                     }
                 }
-            } else {
-                SpiderDebug.log("homeContent 失败: " + responseJson.optString("msg"));
             }
 
             JSONObject result = new JSONObject();
@@ -104,78 +106,9 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 搜索 (searchContent) 
+     * 2. 分类列表 (categoryContent)
      */
     @Override
-    public String searchContent(String key, boolean quick) throws Exception {
-        return searchContent(key, quick, "1");
-    }
-
-    @Override
-    public String searchContent(String key, boolean quick, String pg) throws Exception {
-        try {
-            String time = String.valueOf(System.currentTimeMillis());
-            String pageSize = "8";
-
-            // URL query 参数
-            String queryStr = "keyword=" + URLEncoder.encode(key, "UTF-8") + "&pageNum=" + pg + "&pageSize=" + pageSize;
-            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + queryStr;
-
-            // 严格按字典 ASCII 排序拼接签名串: deviceid -> keyword -> pageNum -> pageSize -> t
-            String signStr = "deviceid=" + DEVICE_ID + "&keyword=" + key + "&pageNum=" + pg + "&pageSize=" + pageSize + "&t=" + time;
-            String sign = sha1(signStr);
-
-            String jsonStr = OkHttp.string(url, getHeaders(time, sign));
-            JSONObject responseJson = new JSONObject(jsonStr);
-
-            JSONObject result = new JSONObject();
-            JSONArray vodList = new JSONArray();
-
-            if (responseJson.optInt("code") == 200) {
-                JSONObject dataObj = responseJson.optJSONObject("data");
-                if (dataObj != null) {
-                    // 抓包显示搜索列表嵌套在 result 对象中
-                    JSONObject resultObj = dataObj.optJSONObject("result");
-                    if (resultObj != null) {
-                        result.put("page", resultObj.optInt("pageNum", 1));
-                        result.put("pagecount", resultObj.optInt("totalPage", 1));
-                        result.put("limit", resultObj.optInt("pageSize", 8));
-                        result.put("total", resultObj.optInt("totalCount", 0));
-
-                        JSONArray list = resultObj.optJSONArray("list");
-                        if (list != null) {
-                            for (int i = 0; i < list.length(); i++) {
-                                JSONObject item = list.getJSONObject(i);
-                                JSONObject vod = new JSONObject();
-                                vod.put("vod_id", item.optString("vodId"));
-                                vod.put("vod_name", item.optString("vodName"));
-                                vod.put("vod_pic", item.optString("vodPic"));
-                                
-                                String remarks = item.optString("vodRemarks");
-                                if (remarks.isEmpty()) {
-                                    remarks = item.optString("vodVersion");
-                                }
-                                vod.put("vod_remarks", remarks);
-
-                                vodList.put(vod);
-                            }
-                        }
-                    }
-                }
-            }
-            result.put("list", vodList);
-            return result.toString();
-
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
-    }
-    
-    /**
-     * 分类列表 (categoryContent)
-     */
-   @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         try {
             String area = extend != null && extend.containsKey("area") ? extend.get("area") : "";
@@ -186,17 +119,14 @@ public class Wencai extends Spider {
                 typeKey = "type";
             }
 
-            String time = String.valueOf(System.currentTimeMillis());
-            
-            // 拼接 URL Query 参数
+            // URL query 参数
             String queryStr = typeKey + "=" + tid + "&pageNum=" + pg + "&area=" + URLEncoder.encode(area, "UTF-8") + "&year=" + URLEncoder.encode(year, "UTF-8");
             String url = HOST + "/api/mw-movie/anonymous/video/list?" + queryStr;
 
-            // 严格按字典 ASCII 序拼接签名串: area -> deviceid -> pageNum -> t -> type1/type -> year
-            String signStr = "area=" + area + "&deviceid=" + DEVICE_ID + "&pageNum=" + pg + "&t=" + time + "&" + typeKey + "=" + tid + "&year=" + year;
-            String sign = sha1(signStr);
+            // 字典序签名参数串: area -> pageNum -> type1/type -> year
+            String paramStr = "area=" + area + "&pageNum=" + pg + "&" + typeKey + "=" + tid + "&year=" + year;
 
-            String jsonStr = OkHttp.string(url, getHeaders(time, sign));
+            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
             JSONObject responseJson = new JSONObject(jsonStr);
 
             JSONObject result = new JSONObject();
@@ -242,7 +172,7 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 详情页 (detailContent)
+     * 3. 详情页 (detailContent)
      */
     @Override
     public String detailContent(List<String> ids) throws Exception {
@@ -250,12 +180,12 @@ public class Wencai extends Spider {
             if (ids == null || ids.isEmpty()) return "";
             String vodId = ids.get(0);
 
-            String time = String.valueOf(System.currentTimeMillis());
-            String sign = sha1("deviceid=" + DEVICE_ID + "&id=" + vodId + "&t=" + time);
-
             String url = HOST + "/api/mw-movie/anonymous/video/detail?id=" + vodId;
-            String jsonStr = OkHttp.string(url, getHeaders(time, sign));
+            
+            // 字典序签名参数: id
+            String paramStr = "id=" + vodId;
 
+            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
             JSONObject responseJson = new JSONObject(jsonStr);
             JSONObject result = new JSONObject();
 
@@ -285,7 +215,6 @@ public class Wencai extends Spider {
                             String nid = ep.optString("nid");
                             
                             if (i > 0) playUrlSb.append("#");
-                            // 拼装成 name$vodId#nid 格式传给 playerContent
                             playUrlSb.append(name).append("$").append(vodId).append("#").append(nid);
                         }
                         vodDetail.put("vod_play_from", "默认线路");
@@ -305,9 +234,72 @@ public class Wencai extends Spider {
         return "";
     }
 
-   
-   /**
-     * 播放解析 (playerContent)
+    /**
+     * 4. 搜索 (searchContent)
+     */
+    @Override
+    public String searchContent(String key, boolean quick) throws Exception {
+        return searchContent(key, quick, "1");
+    }
+
+    @Override
+    public String searchContent(String key, boolean quick, String pg) throws Exception {
+        try {
+            String pageSize = "8";
+            String queryStr = "keyword=" + URLEncoder.encode(key, "UTF-8") + "&pageNum=" + pg + "&pageSize=" + pageSize;
+            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + queryStr;
+
+            // 字典序签名参数: keyword -> pageNum -> pageSize
+            String paramStr = "keyword=" + key + "&pageNum=" + pg + "&pageSize=" + pageSize;
+
+            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
+            JSONObject responseJson = new JSONObject(jsonStr);
+
+            JSONObject result = new JSONObject();
+            JSONArray vodList = new JSONArray();
+
+            if (responseJson.optInt("code") == 200) {
+                JSONObject dataObj = responseJson.optJSONObject("data");
+                if (dataObj != null) {
+                    JSONObject resultObj = dataObj.optJSONObject("result");
+                    if (resultObj != null) {
+                        result.put("page", resultObj.optInt("pageNum", 1));
+                        result.put("pagecount", resultObj.optInt("totalPage", 1));
+                        result.put("limit", resultObj.optInt("pageSize", 8));
+                        result.put("total", resultObj.optInt("totalCount", 0));
+
+                        JSONArray list = resultObj.optJSONArray("list");
+                        if (list != null) {
+                            for (int i = 0; i < list.length(); i++) {
+                                JSONObject item = list.getJSONObject(i);
+                                JSONObject vod = new JSONObject();
+                                vod.put("vod_id", item.optString("vodId"));
+                                vod.put("vod_name", item.optString("vodName"));
+                                vod.put("vod_pic", item.optString("vodPic"));
+                                
+                                String remarks = item.optString("vodRemarks");
+                                if (remarks.isEmpty()) {
+                                    remarks = item.optString("vodVersion");
+                                }
+                                vod.put("vod_remarks", remarks);
+
+                                vodList.put(vod);
+                            }
+                        }
+                    }
+                }
+            }
+            result.put("list", vodList);
+            return result.toString();
+
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+        }
+        return "";
+    }
+
+    /**
+     * 5. 播放解析 (playerContent)
      */
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
@@ -318,15 +310,14 @@ public class Wencai extends Spider {
             String vodId = parts[0];
             String nid = parts[1];
 
-            String time = String.valueOf(System.currentTimeMillis());
             String queryStr = "clientType=3&id=" + vodId + "&nid=" + nid;
             String url = HOST + "/api/mw-movie/anonymous/v2/video/episode/url?" + queryStr;
 
-            String signStr = "clientType=3&deviceid=" + DEVICE_ID + "&id=" + vodId + "&nid=" + nid + "&t=" + time;
-            String sign = sha1(signStr);
+            // 字典序签名参数: clientType -> id -> nid
+            String paramStr = "clientType=3&id=" + vodId + "&nid=" + nid;
 
-            // 获取 API Headers
-            HashMap<String, String> headers = getHeaders(time, sign);
+            HashMap<String, String> headers = getHeaders(paramStr);
+            // 替换 TV / Android User-Agent
             headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36");
 
             String jsonStr = OkHttp.string(url, headers);
@@ -339,8 +330,7 @@ public class Wencai extends Spider {
                     if (list != null && list.length() > 0) {
                         String targetUrl = "";
 
-                        // 策略优化：
-                        // 1. 优先寻找 flag 为 true 的画质 (服务端推荐/免校验标识)
+                        // 优先寻找 flag 为 true 的画质
                         for (int i = 0; i < list.length(); i++) {
                             JSONObject stream = list.getJSONObject(i);
                             if (stream.optBoolean("flag", false)) {
@@ -349,16 +339,16 @@ public class Wencai extends Spider {
                             }
                         }
 
-                        // 2. 如果没有 flag=true，默认取第一条最高画质 (1080P)
+                        // 保底降级选择第一条
                         if (targetUrl.isEmpty()) {
                             targetUrl = list.getJSONObject(0).optString("url");
                         }
 
                         JSONObject result = new JSONObject();
-                        result.put("parse", 0); // 直链
+                        result.put("parse", 0);
                         result.put("url", targetUrl);
 
-                        // 根据抓包补全播放器请求防盗链 Header
+                        // 播放器防盗链 Header
                         JSONObject playHeaders = new JSONObject();
                         playHeaders.put("User-Agent", headers.get("User-Agent"));
                         playHeaders.put("Origin", "https://www.ghw9zwp5.com");
