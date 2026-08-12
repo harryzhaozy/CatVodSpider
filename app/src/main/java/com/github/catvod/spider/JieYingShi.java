@@ -252,17 +252,11 @@ public class JieYingShi extends Spider {
     }
 
 
-    @Override
-    public Object[] localProxy(
-            Map<String, String> params) {
-
-        return null;
-    }
+   
 
 
-    @Override
-    public String destroy() {
-        return "正在Destroy";
+   @Override
+    public void destroy() {
     }
 
 
