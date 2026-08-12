@@ -28,9 +28,10 @@ public class Wencai extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context);
+        
         // 初始化时预热请求，换取 WAF Cookie
         try {
+            super.init(context, extend);
             homeContent(false);
         } catch (Exception e) {
             SpiderDebug.log(e);
