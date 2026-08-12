@@ -43,23 +43,29 @@ public class Wencai extends Spider {
      * SHA-1 签名计算 (强制小写)
      */
     public static String sha1(String str) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            byte[] hashBytes = digest.digest(str.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(b & 0xFF);
-                if (hex.length() == 1) {
-                    sb.append('0');
-                }
-                sb.append(hex);
+    try {
+        byte[] bytes = java.security.MessageDigest
+                .getInstance("SHA-1")
+                .digest(str.getBytes());
+
+        StringBuilder sb = new StringBuilder();
+
+        for (byte b : bytes) {
+            String hex = Integer.toHexString(b & 0xFF);
+
+            if (hex.length() == 1) {
+                sb.append('0');
             }
-            return sb.toString().toLowerCase();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-            return "";
+
+            sb.append(hex);
         }
+
+        return sb.toString();
+
+    } catch (java.security.NoSuchAlgorithmException e) {
+        return null;
     }
+}
 
     /**
      * 严格按 ASCII 字典序重排所有 key=value 键值对
