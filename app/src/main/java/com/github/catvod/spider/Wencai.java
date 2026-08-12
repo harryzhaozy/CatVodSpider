@@ -31,10 +31,15 @@ public class Wencai extends Spider {
         
         // 初始化时预热请求，换取 WAF Cookie
         try {
-            super.init(context, extend);
+            super.init(context,extend);
+        } catch (Exception ignored) {
+        }
+        
+        // 预热请求唤醒 WAF Cookie
+        try {
             homeContent(false);
-        } catch (Exception e) {
-            SpiderDebug.log(e);
+        } catch (Throwable t) {
+            SpiderDebug.log(t);
         }
     }
 
