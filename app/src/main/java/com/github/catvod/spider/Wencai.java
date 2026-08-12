@@ -40,7 +40,7 @@ public class Wencai extends Spider {
     }
 
     /**
-     * SHA-1 签名计算 (强制全小写)
+     * SHA-1 签名计算 (强制小写)
      */
     public static String sha1(String str) {
         try {
@@ -62,10 +62,10 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 参数排序器：按 ASCII 字典序严格重排所有 key=value
+     * 严格按 ASCII 字典序重排所有 key=value 键值对
      */
     private String sortQueryParams(String queryStr) {
-        if (queryStr == null || queryStr.isEmpty()) return "";
+        if (queryStr == null || queryStr.trim().isEmpty()) return "";
         String[] pairs = queryStr.split("&");
         java.util.Arrays.sort(pairs);
         StringBuilder sb = new StringBuilder();
@@ -77,21 +77,26 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 自定义 HTTP 请求方法：处理 Header 签名与 Cookie 发送
+     * 自定义 HTTP 请求方法：保证 timestamp 强一致性与正确签名
      */
     private String fetch(String url, String paramStr) {
         try {
+            // 核心：统一全局唯一时间戳
             String timestamp = String.valueOf(System.currentTimeMillis());
 
-            String signStr;
-            if (paramStr == null || paramStr.isEmpty()) {
-                signStr = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
+            // 构建待签名的所有 key-value 组合
+            String rawParams;
+            if (paramStr == null || paramStr.trim().isEmpty()) {
+                rawParams = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
             } else {
-                signStr = "deviceid=" + DEVICE_ID + "&" + paramStr + "&t=" + timestamp;
+                rawParams = paramStr + "&deviceid=" + DEVICE_ID + "&t=" + timestamp;
             }
 
-            signStr = sortQueryParams(signStr);
-            String sign = sha1(signStr);
+            // 按 ASCII 字母字典序排序 (例如: deviceid=...&keyword=...&pageNum=...&pageSize=...&t=...)
+            String sortedSignStr = sortQueryParams(rawParams);
+
+            // 计算 SHA-1
+            String sign = sha1(sortedSignStr);
 
             HashMap<String, String> headers = new HashMap<>();
             headers.put("User-Agent", "okhttp/3.12.13");
