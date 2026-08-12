@@ -96,7 +96,7 @@ public class Wencai extends Spider {
             String sign = sha1(sortedSignStr);
 
             HashMap<String, String> headers = new HashMap<>();
-            // 严格对齐正常抓包的 6 个 Header 字段
+            
             headers.put("Host", "www.hkybqufgh.com");
             headers.put("t", timestamp);
             headers.put("sign", sign);
