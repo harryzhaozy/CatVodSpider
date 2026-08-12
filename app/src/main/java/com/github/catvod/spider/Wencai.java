@@ -78,7 +78,7 @@ public class Wencai extends Spider {
 
         return result.toString();
 
-    } catch (Exception e) {
+    } catch (Exception ex) {
 
         return "";
 
