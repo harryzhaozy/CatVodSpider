@@ -41,50 +41,52 @@ public class Wencai extends Spider {
      * 嵌套哈希签名算法：SHA-1(MD5(e))
      */
     public static String sign(String e) {
-        try {
-            // 1. 计算 MD5 并转为 32 位小写 Hex
-            MessageDigest md5 = MessageDigest.getInstance("MD5");
-            byte[] md5Bytes = md5.digest(e.getBytes(StandardCharsets.UTF_8));
-            StringBuilder md5Hex = new StringBuilder();
-            for (byte b : md5Bytes) {
-                md5Hex.append(String.format("%02x", b & 0xff));
-            }
 
-            // 2. 对 MD5 的字符串结果计算 SHA-1 并转为 40 位小写 Hex
-            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-            byte[] sha1Bytes = sha1.digest(md5Hex.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder result = new StringBuilder();
-            for (byte b : sha1Bytes) {
-                result.append(String.format("%02x", b & 0xff));
-            }
+    try {
 
-            return result.toString();
-        } catch (Exception ex) {
-            SpiderDebug.log(ex);
-            return "";
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
+
+        byte[] md5Bytes = md5.digest(e.getBytes("UTF-8"));
+
+
+
+        StringBuilder md5Hex = new StringBuilder();
+
+        for (byte b : md5Bytes) {
+
+            md5Hex.append(String.format("%02x", b & 0xff));
+
         }
+
+
+
+        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+
+        byte[] sha1Bytes = sha1.digest(md5Hex.toString().getBytes("UTF-8"));
+
+
+
+        StringBuilder result = new StringBuilder();
+
+        for (byte b : sha1Bytes) {
+
+            result.append(String.format("%02x", b & 0xff));
+
+        }
+
+
+
+        return result.toString();
+
+    } catch (Exception e) {
+
+        return "";
+
     }
 
-    /**
-     * 参数按 ASCII 字典序排序
-     */
-    private String sortQueryParams(String queryStr) {
-        if (queryStr == null || queryStr.trim().isEmpty()) {
-            return "";
-        }
-        String[] pairs = queryStr.split("&");
-        List<String> pairList = new ArrayList<>(Arrays.asList(pairs));
-        Collections.sort(pairList);
+}
 
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < pairList.size(); i++) {
-            sb.append(pairList.get(i));
-            if (i < pairList.size() - 1) {
-                sb.append("&");
-            }
-        }
-        return sb.toString();
-    }
+    
 
     /**
      * HTTP 请求封装：精简 Header + 嵌套 Hash 签名
@@ -92,6 +94,7 @@ public class Wencai extends Spider {
     private String fetch(String url, String paramStr) {
         try {
             String timestamp = String.valueOf(System.currentTimeMillis());
+            
 
             // 1. 拼接待签名明文串
             String rawParams;
@@ -102,7 +105,7 @@ public class Wencai extends Spider {
             }
 
             // 2. 排序参数串
-            //String sortedParams = sortQueryParams(rawParams);
+           
 
             // 3. 计算 SHA-1(MD5(e))
             //String signVal = sign(sortedParams);
