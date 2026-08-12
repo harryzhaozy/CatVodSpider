@@ -231,6 +231,9 @@ public class Wencai extends Spider {
     /**
      * 播放解析 (playerContent)
      */
+   /**
+     * 播放解析 (playerContent)
+     */
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         try {
@@ -247,10 +250,10 @@ public class Wencai extends Spider {
             String signStr = "clientType=3&deviceid=" + DEVICE_ID + "&id=" + vodId + "&nid=" + nid + "&t=" + time;
             String sign = sha1(signStr);
 
+            // 获取 API Headers
             HashMap<String, String> headers = getHeaders(time, sign);
-            //headers.put("User-Agent", "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
-            // Android TV 标准 UA
             headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36");
+
             String jsonStr = OkHttp.string(url, headers);
             JSONObject responseJson = new JSONObject(jsonStr);
 
@@ -261,27 +264,31 @@ public class Wencai extends Spider {
                     if (list != null && list.length() > 0) {
                         String targetUrl = "";
 
-                        // 优先提取 needLogin: false 的免登录播放流
+                        // 策略优化：
+                        // 1. 优先寻找 flag 为 true 的画质 (服务端推荐/免校验标识)
                         for (int i = 0; i < list.length(); i++) {
                             JSONObject stream = list.getJSONObject(i);
-                            if (!stream.optBoolean("needLogin", true)) {
+                            if (stream.optBoolean("flag", false)) {
                                 targetUrl = stream.optString("url");
                                 break;
                             }
                         }
 
-                        // 保底降级选择第一条
+                        // 2. 如果没有 flag=true，默认取第一条最高画质 (1080P)
                         if (targetUrl.isEmpty()) {
                             targetUrl = list.getJSONObject(0).optString("url");
                         }
 
                         JSONObject result = new JSONObject();
-                        result.put("parse", 0);
+                        result.put("parse", 0); // 直链
                         result.put("url", targetUrl);
 
+                        // 根据抓包补全播放器请求防盗链 Header
                         JSONObject playHeaders = new JSONObject();
-                        //playHeaders.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                        playHeaders.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36");
+                        playHeaders.put("User-Agent", headers.get("User-Agent"));
+                        playHeaders.put("Origin", "https://www.ghw9zwp5.com");
+                        playHeaders.put("Referer", "https://www.ghw9zwp5.com/");
+                        
                         result.put("header", playHeaders.toString());
 
                         return result.toString();
