@@ -4,7 +4,7 @@ import android.content.Context;
 
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.net.OkHttp;
+import com.github.catvod.net.OkHttpClient;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -14,24 +14,27 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import okhttp3.Headers;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
- * 完整适配 WAF Cookie 绕过与动态 SHA-1 强签名的 Wencai 爬虫类
+ * 动态提取 WAF Cookie 与字典序 SHA-1 强签名的 Wencai 爬虫类
  */
 public class Wencai extends Spider {
 
     private static final String HOST = "https://www.hkybqufgh.com";
     private static final String DEVICE_ID = "c684e808-4922-45e9-b158-da5c48765415";
 
-    // 动态维护 WAF 颁发的防护 Cookie（如 https_waf_cookie）
+    // 动态存储防护 Cookie
     private static String wafCookie = "";
 
-    @Override
+   @Override
     public void init(Context context, String extend) {
-        
-        // 初始化时预热请求，换取 WAF Cookie
         try {
-            super.init(context,extend);
+            super.init(context, extend);
         } catch (Exception ignored) {
         }
         
@@ -66,38 +69,79 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 自动化 Header 与签名生成
-     * @param paramStr 字典序排序后的原始参数串 (注意：中文必须是未经 URLEncoder 的原始字符)
+     * 自定义 HTTP 请求方法：实现发送 Cookie，并自动捕捉 Response 中的 Set-Cookie
      */
-    protected HashMap<String, String> getHeaders(String paramStr) {
-        String timestamp = String.valueOf(System.currentTimeMillis());
+    private String fetch(String url, String paramStr) {
+        try {
+            String timestamp = String.valueOf(System.currentTimeMillis());
 
-        // 构造签名串: ASCII 字典序 (paramStr 中的 key 均字母在前，以保证拼接顺序)
-        String signStr;
-        if (paramStr == null || paramStr.isEmpty()) {
-            signStr = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
-        } else {
-            signStr = paramStr + "&deviceid=" + DEVICE_ID + "&t=" + timestamp;
+            // 字典序拼接: 如果有 paramStr 则拼在前，再接 deviceid 和 t
+            String signStr;
+            if (paramStr == null || paramStr.isEmpty()) {
+                signStr = "deviceid=" + DEVICE_ID + "&t=" + timestamp;
+            } else {
+                signStr = "deviceid=" + DEVICE_ID + "&" + paramStr + "&t=" + timestamp;
+            }
+
+            // 验证 ASCII 字典序排序：确保参数完全按照字母升序
+            signStr = sortQueryParams(signStr);
+
+            String sign = sha1(signStr);
+
+            Request.Builder builder = new Request.Builder().url(url);
+            builder.addHeader("User-Agent", "okhttp/3.12.13");
+            builder.addHeader("Host", "www.hkybqufgh.com");
+            builder.addHeader("Accept", "application/json, text/plain, */*");
+            builder.addHeader("Accept-Language", "zh-CN,zh;q=0.9");
+            builder.addHeader("t", timestamp);
+            builder.addHeader("sign", sign);
+            builder.addHeader("deviceid", DEVICE_ID);
+            builder.addHeader("Accept-Encoding", "gzip");
+
+            if (!wafCookie.isEmpty()) {
+                builder.addHeader("Cookie", wafCookie);
+            }
+
+            Response response = OkHttpClient.getClient().newCall(builder.build()).execute();
+            
+            // 自动拦截并保存防刷 Cookie
+            List<String> cookies = response.headers("Set-Cookie");
+            if (cookies != null && !cookies.isEmpty()) {
+                StringBuilder cookieSb = new StringBuilder();
+                for (String c : cookies) {
+                    String[] parts = c.split(";");
+                    if (parts.length > 0) {
+                        if (cookieSb.length() > 0) cookieSb.append("; ");
+                        cookieSb.append(parts[0]);
+                    }
+                }
+                if (cookieSb.length() > 0) {
+                    wafCookie = cookieSb.toString();
+                }
+            }
+
+            if (response.body() != null) {
+                return response.body().string();
+            }
+        } catch (Exception e) {
+            SpiderDebug.log(e);
         }
+        return "";
+    }
 
-        String sign = sha1(signStr);
-
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "okhttp/3.12.13");
-        headers.put("Host", "www.hkybqufgh.com");
-        headers.put("Accept", "application/json, text/plain, */*");
-        headers.put("Accept-Language", "zh-CN,zh;q=0.9");
-        headers.put("t", timestamp);
-        headers.put("sign", sign);
-        headers.put("deviceid", DEVICE_ID);
-        headers.put("Accept-Encoding", "gzip");
-
-        // 如果获取到了 WAF Cookie，带上以通过防火墙校验
-        if (!wafCookie.isEmpty()) {
-            headers.put("Cookie", wafCookie);
+    /**
+     * 参数排序器：按 ASCII 字典序严格重排所有 key=value
+     */
+    private String sortQueryParams(String queryStr) {
+        if (queryStr == null || queryStr.isEmpty()) return "";
+        String[] pairs = queryStr.split("&");
+        java.util.Arrays.sort(pairs);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < pairs.length; i++) {
+            if (i > 0) sb.append("&");
+            sb.append(pairs[i]);
         }
-
-        return headers;
+        return sb.toString();
     }
 
     /**
@@ -107,7 +151,7 @@ public class Wencai extends Spider {
     public String homeContent(boolean filter) throws Exception {
         try {
             String url = HOST + "/api/mw-movie/anonymous/home/hotSearch";
-            String jsonStr = OkHttp.string(url, getHeaders(""));
+            String jsonStr = fetch(url, "");
 
             JSONObject responseJson = new JSONObject(jsonStr);
             JSONArray vodList = new JSONArray();
@@ -125,8 +169,6 @@ public class Wencai extends Spider {
                         vodList.put(vod);
                     }
                 }
-            } else {
-                SpiderDebug.log("homeContent 校验失败: " + jsonStr);
             }
 
             JSONObject result = new JSONObject();
@@ -153,14 +195,12 @@ public class Wencai extends Spider {
                 typeKey = "type";
             }
 
-            // 发起请求的真实 URL (需要 URL 编码)
             String queryStr = typeKey + "=" + tid + "&pageNum=" + pg + "&area=" + URLEncoder.encode(area, "UTF-8") + "&year=" + URLEncoder.encode(year, "UTF-8");
             String url = HOST + "/api/mw-movie/anonymous/video/list?" + queryStr;
 
-            // 参与签名的参数串 (按字典序排序: area -> pageNum -> type1/type -> year，保留原始字符)
             String paramStr = "area=" + area + "&pageNum=" + pg + "&" + typeKey + "=" + tid + "&year=" + year;
 
-            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
+            String jsonStr = fetch(url, paramStr);
             JSONObject responseJson = new JSONObject(jsonStr);
 
             JSONObject result = new JSONObject();
@@ -217,7 +257,7 @@ public class Wencai extends Spider {
             String url = HOST + "/api/mw-movie/anonymous/video/detail?id=" + vodId;
             String paramStr = "id=" + vodId;
 
-            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
+            String jsonStr = fetch(url, paramStr);
             JSONObject responseJson = new JSONObject(jsonStr);
             JSONObject result = new JSONObject();
 
@@ -267,7 +307,7 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 4. 搜索 (searchContent) - 严格对齐 data.result.list 结构
+     * 4. 搜索 (searchContent)
      */
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
@@ -279,14 +319,13 @@ public class Wencai extends Spider {
         try {
             String pageSize = "8";
 
-            // 请求 URL 对 key 进行转码
             String queryStr = "keyword=" + URLEncoder.encode(key, "UTF-8") + "&pageNum=" + pg + "&pageSize=" + pageSize;
             String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + queryStr;
 
-            // 签名计算：必须用未 URLEncoder 的原始 key（按 keyword -> pageNum -> pageSize 排序）
+            // 签名入参：未编码 key
             String paramStr = "keyword=" + key + "&pageNum=" + pg + "&pageSize=" + pageSize;
 
-            String jsonStr = OkHttp.string(url, getHeaders(paramStr));
+            String jsonStr = fetch(url, paramStr);
             JSONObject responseJson = new JSONObject(jsonStr);
 
             JSONObject result = new JSONObject();
@@ -349,10 +388,7 @@ public class Wencai extends Spider {
 
             String paramStr = "clientType=3&id=" + vodId + "&nid=" + nid;
 
-            HashMap<String, String> headers = getHeaders(paramStr);
-            headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36");
-
-            String jsonStr = OkHttp.string(url, headers);
+            String jsonStr = fetch(url, paramStr);
             JSONObject responseJson = new JSONObject(jsonStr);
 
             if (responseJson.optInt("code") == 200) {
@@ -379,7 +415,7 @@ public class Wencai extends Spider {
                         result.put("url", targetUrl);
 
                         JSONObject playHeaders = new JSONObject();
-                        playHeaders.put("User-Agent", headers.get("User-Agent"));
+                        playHeaders.put("User-Agent", "Mozilla/5.0 (Linux; Android 9; TV-BOX Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36");
                         playHeaders.put("Origin", "https://www.ghw9zwp5.com");
                         playHeaders.put("Referer", "https://www.ghw9zwp5.com/");
 
