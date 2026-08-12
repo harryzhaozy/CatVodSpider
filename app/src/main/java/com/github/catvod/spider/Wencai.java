@@ -104,19 +104,25 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 搜索 (searchContent)
+     * 搜索 (searchContent) 
      */
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
+        return searchContent(key, quick, "1");
+    }
+
+    @Override
+    public String searchContent(String key, boolean quick, String pg) throws Exception {
         try {
             String time = String.valueOf(System.currentTimeMillis());
-            String encodedKey = URLEncoder.encode(key, "UTF-8");
-            
-            // URL 路径
-            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?keyword=" + encodedKey + "&pageNum=1";
+            String pageSize = "8";
 
-            // 字典序签名串: deviceid -> keyword -> pageNum -> t
-            String signStr = "deviceid=" + DEVICE_ID + "&keyword=" + key + "&pageNum=1&t=" + time;
+            // URL query 参数
+            String queryStr = "keyword=" + URLEncoder.encode(key, "UTF-8") + "&pageNum=" + pg + "&pageSize=" + pageSize;
+            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + queryStr;
+
+            // 严格按字典 ASCII 排序拼接签名串: deviceid -> keyword -> pageNum -> pageSize -> t
+            String signStr = "deviceid=" + DEVICE_ID + "&keyword=" + key + "&pageNum=" + pg + "&pageSize=" + pageSize + "&t=" + time;
             String sign = sha1(signStr);
 
             String jsonStr = OkHttp.string(url, getHeaders(time, sign));
@@ -128,16 +134,31 @@ public class Wencai extends Spider {
             if (responseJson.optInt("code") == 200) {
                 JSONObject dataObj = responseJson.optJSONObject("data");
                 if (dataObj != null) {
-                    JSONArray list = dataObj.optJSONArray("list");
-                    if (list != null) {
-                        for (int i = 0; i < list.length(); i++) {
-                            JSONObject item = list.getJSONObject(i);
-                            JSONObject vod = new JSONObject();
-                            vod.put("vod_id", item.optString("vodId"));
-                            vod.put("vod_name", item.optString("vodName"));
-                            vod.put("vod_pic", item.optString("vodPic"));
-                            vod.put("vod_remarks", item.optString("vodRemarks"));
-                            vodList.put(vod);
+                    // 抓包显示搜索列表嵌套在 result 对象中
+                    JSONObject resultObj = dataObj.optJSONObject("result");
+                    if (resultObj != null) {
+                        result.put("page", resultObj.optInt("pageNum", 1));
+                        result.put("pagecount", resultObj.optInt("totalPage", 1));
+                        result.put("limit", resultObj.optInt("pageSize", 8));
+                        result.put("total", resultObj.optInt("totalCount", 0));
+
+                        JSONArray list = resultObj.optJSONArray("list");
+                        if (list != null) {
+                            for (int i = 0; i < list.length(); i++) {
+                                JSONObject item = list.getJSONObject(i);
+                                JSONObject vod = new JSONObject();
+                                vod.put("vod_id", item.optString("vodId"));
+                                vod.put("vod_name", item.optString("vodName"));
+                                vod.put("vod_pic", item.optString("vodPic"));
+                                
+                                String remarks = item.optString("vodRemarks");
+                                if (remarks.isEmpty()) {
+                                    remarks = item.optString("vodVersion");
+                                }
+                                vod.put("vod_remarks", remarks);
+
+                                vodList.put(vod);
+                            }
                         }
                     }
                 }
