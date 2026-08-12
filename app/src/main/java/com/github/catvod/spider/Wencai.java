@@ -60,10 +60,13 @@ public class Wencai extends Spider {
     /**
      * 首页推荐 / 热门搜索 (homeContent)
      */
+ 
     @Override
     public String homeContent(boolean filter) throws Exception {
         try {
             String time = String.valueOf(System.currentTimeMillis());
+            
+            // 严格按字典序 ASCII 拼接签名串：deviceid=...&t=...
             String signStr = "deviceid=" + DEVICE_ID + "&t=" + time;
             String sign = sha1(signStr);
 
@@ -86,6 +89,8 @@ public class Wencai extends Spider {
                         vodList.put(vod);
                     }
                 }
+            } else {
+                SpiderDebug.log("homeContent 失败: " + responseJson.optString("msg"));
             }
 
             JSONObject result = new JSONObject();
@@ -99,24 +104,75 @@ public class Wencai extends Spider {
     }
 
     /**
-     * 分类列表 (categoryContent)
+     * 搜索 (searchContent)
      */
     @Override
+    public String searchContent(String key, boolean quick) throws Exception {
+        try {
+            String time = String.valueOf(System.currentTimeMillis());
+            String encodedKey = URLEncoder.encode(key, "UTF-8");
+            
+            // URL 路径
+            String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?keyword=" + encodedKey + "&pageNum=1";
+
+            // 字典序签名串: deviceid -> keyword -> pageNum -> t
+            String signStr = "deviceid=" + DEVICE_ID + "&keyword=" + key + "&pageNum=1&t=" + time;
+            String sign = sha1(signStr);
+
+            String jsonStr = OkHttp.string(url, getHeaders(time, sign));
+            JSONObject responseJson = new JSONObject(jsonStr);
+
+            JSONObject result = new JSONObject();
+            JSONArray vodList = new JSONArray();
+
+            if (responseJson.optInt("code") == 200) {
+                JSONObject dataObj = responseJson.optJSONObject("data");
+                if (dataObj != null) {
+                    JSONArray list = dataObj.optJSONArray("list");
+                    if (list != null) {
+                        for (int i = 0; i < list.length(); i++) {
+                            JSONObject item = list.getJSONObject(i);
+                            JSONObject vod = new JSONObject();
+                            vod.put("vod_id", item.optString("vodId"));
+                            vod.put("vod_name", item.optString("vodName"));
+                            vod.put("vod_pic", item.optString("vodPic"));
+                            vod.put("vod_remarks", item.optString("vodRemarks"));
+                            vodList.put(vod);
+                        }
+                    }
+                }
+            }
+            result.put("list", vodList);
+            return result.toString();
+
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+        }
+        return "";
+    }
+    
+    /**
+     * 分类列表 (categoryContent)
+     */
+   @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         try {
             String area = extend != null && extend.containsKey("area") ? extend.get("area") : "";
             String year = extend != null && extend.containsKey("year") ? extend.get("year") : "";
             
-            String typeParam = "type1=" + tid;
+            String typeKey = "type1";
             if (extend != null && extend.containsKey("type") && !extend.get("type").isEmpty()) {
-                typeParam = "type=" + extend.get("type");
+                typeKey = "type";
             }
 
             String time = String.valueOf(System.currentTimeMillis());
-            String queryStr = typeParam + "&pageNum=" + pg + "&area=" + URLEncoder.encode(area, "UTF-8") + "&year=" + URLEncoder.encode(year, "UTF-8");
+            
+            // 拼接 URL Query 参数
+            String queryStr = typeKey + "=" + tid + "&pageNum=" + pg + "&area=" + URLEncoder.encode(area, "UTF-8") + "&year=" + URLEncoder.encode(year, "UTF-8");
             String url = HOST + "/api/mw-movie/anonymous/video/list?" + queryStr;
 
-            String signStr = "area=" + area + "&deviceid=" + DEVICE_ID + "&pageNum=" + pg + "&t=" + time + "&" + typeParam + "&year=" + year;
+            // 严格按字典 ASCII 序拼接签名串: area -> deviceid -> pageNum -> t -> type1/type -> year
+            String signStr = "area=" + area + "&deviceid=" + DEVICE_ID + "&pageNum=" + pg + "&t=" + time + "&" + typeKey + "=" + tid + "&year=" + year;
             String sign = sha1(signStr);
 
             String jsonStr = OkHttp.string(url, getHeaders(time, sign));
@@ -228,9 +284,7 @@ public class Wencai extends Spider {
         return "";
     }
 
-    /**
-     * 播放解析 (playerContent)
-     */
+   
    /**
      * 播放解析 (playerContent)
      */
