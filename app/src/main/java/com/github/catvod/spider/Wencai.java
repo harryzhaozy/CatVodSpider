@@ -32,7 +32,7 @@ public class Wencai extends Spider {
         try {
             super.init(context, extend);
              } catch (Exception e) {
-            return "";
+            e.printStackTrace();
         }
         this.currentHost = HOST;
     }
