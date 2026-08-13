@@ -3,34 +3,21 @@ package com.github.catvod.spider;
 import android.content.Context;
 import android.text.TextUtils;
 import com.github.catvod.crawler.Spider;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import com.github.catvod.net.OkHttp; // 引入 TVBox 框架内置的 OkHttp 工具类
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class Wencai extends Spider {
     private static final String HOST = "https://www.hkybqufgh.com";
     private static final String KEY = "cb808529bae6b6be45ecfab29a4889bc";
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-    private OkHttpClient client;
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        try{
         super.init(context, extend);
-        client = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build();
-        } catch (Exception e)
-            {
-             e.printStackTrace();
-            }
     }
 
     private String md5(String s) {
@@ -70,7 +57,6 @@ public class Wencai extends Spider {
 
     private HashMap<String, String> getHeaders(LinkedHashMap<String, String> params) {
         String t = String.valueOf(System.currentTimeMillis());
-        // 保证参数拼装顺序不变，按照 JS 的 { ...params, key, t }
         LinkedHashMap<String, String> signParams = new LinkedHashMap<>(params);
         signParams.put("key", KEY);
         signParams.put("t", t);
@@ -113,18 +99,17 @@ public class Wencai extends Spider {
         return result;
     }
 
-    private JSONObject reqSafe(String url, HashMap<String, String> headers) {
+    /**
+     * 使用 com.github.catvod.net.OkHttp 进行网络请求
+     */
+    private JSONObject reqSafe(String url, Map<String, String> headers) {
         try {
-            Request.Builder builder = new Request.Builder().url(url).get();
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                builder.addHeader(entry.getKey(), entry.getValue());
+            // 直接使用 CatVod 框架封装的 OkHttp.string()
+            String content = OkHttp.string(url, headers);
+            if (!TextUtils.isEmpty(content)) {
+                return new JSONObject(content);
             }
-            Response response = client.newCall(builder.build()).execute();
-            if (response.isSuccessful() && response.body() != null) {
-                return new JSONObject(response.body().string());
-            }
-        } catch (Exception e) {
-            // Ignored as per JS catch
+        } catch (Exception ignored) {
         }
         return new JSONObject();
     }
@@ -208,7 +193,7 @@ public class Wencai extends Spider {
                     JSONArray languageList = d.optJSONArray("languageList");
                     JSONObject f = new JSONObject().put("key", "lang").put("name", "语言");
                     JSONArray vals = new JSONArray();
-                    for (int i = 0; languageList != null && i < languageList.length(); i++)
+                    for (int i = 0; i < languageList.length(); i++)
                         vals.put(new JSONObject().put("n", languageList.optJSONObject(i).optString("itemText")).put("v", languageList.optJSONObject(i).optString("itemText")));
                     arr.put(f.put("value", vals));
                 }
@@ -269,7 +254,7 @@ public class Wencai extends Spider {
 
         String url = HOST + "/api/mw-movie/anonymous/video/list?" + toQueryString(params);
         JSONObject res = reqSafe(url, getHeaders(params));
-        
+
         JSONObject data = res.optJSONObject("data");
         JSONArray vodList = normalizeVodList(data != null ? data.optJSONArray("list") : new JSONArray());
 
@@ -290,7 +275,7 @@ public class Wencai extends Spider {
 
         String url = HOST + "/api/mw-movie/anonymous/video/detail?id=" + id;
         JSONObject res = reqSafe(url, getHeaders(params));
-        
+
         JSONObject data = res.optJSONObject("data");
         JSONArray wrapper = new JSONArray();
         if (data != null) wrapper.put(data);
@@ -305,15 +290,15 @@ public class Wencai extends Spider {
         }
 
         JSONObject vod = normalized.optJSONObject(0);
-        vod.put("vod_play_from", "多多APP");
+        vod.put("vod_play_from", "蜗牛播放");
 
-        JSONArray episodelist = vod.optJSONArray("episodelist"); // Normalize转换为全小写了
+        JSONArray episodelist = vod.optJSONArray("episodelist");
         if (episodelist != null && episodelist.length() > 0) {
             List<String> eps = new ArrayList<>();
             for (int i = 0; i < episodelist.length(); i++) {
                 JSONObject ep = episodelist.optJSONObject(i);
                 String name = ep.optString("name");
-                if (name.length() == 1) name = "0" + name; // padding
+                if (name.length() == 1) name = "0" + name;
                 String nid = ep.optString("nid");
                 eps.add(name + "$" + id + "-" + nid);
             }
@@ -361,8 +346,7 @@ public class Wencai extends Spider {
 
         JSONObject result = new JSONObject();
         result.put("parse", 0);
-        // 如果环境支持多线路可以直接传 JSONArray，否则兜底回退为提取第一个线路的纯字符串格式
-        result.put("url", urls.length() > 0 ? urls : ""); 
+        result.put("url", urls.length() > 0 ? urls : "");
         result.put("header", header);
         return result.toString();
     }
