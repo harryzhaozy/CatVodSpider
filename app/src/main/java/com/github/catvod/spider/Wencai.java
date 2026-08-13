@@ -29,7 +29,11 @@ public class Wencai extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
+        try {
+            super.init(context, extend);
+             } catch (Exception e) {
+            return "";
+        }
         this.currentHost = HOST;
     }
 
