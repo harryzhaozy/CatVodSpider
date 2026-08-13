@@ -1,475 +1,391 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.text.TextUtils;
 import com.github.catvod.crawler.Spider;
-import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.net.OkHttp;
-
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Wencai extends Spider {
-
     private static final String HOST = "https://www.hkybqufgh.com";
     private static final String KEY = "cb808529bae6b6be45ecfab29a4889bc";
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-    private static final String DEVICE_ID = UUID.randomUUID().toString();
-
-    private String currentHost = HOST;
+    private OkHttpClient client;
 
     @Override
-    public void init(Context context, String extend) {
-        try {
-            super.init(context, extend);
-             } catch (Exception e) {
-            e.printStackTrace();
+    public void init(Context context, String extend) throws Exception {
+        try{
+        super.init(context, extend);
+        client = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .build();
         }
-        this.currentHost = HOST;
+        cath(Exception e)
+            {
+             e.printStackTrace();
+            }
     }
 
-    // ==================== 加密与辅助工具 ====================
-
-    private String md5(String input) {
+    private String md5(String s) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = md.digest(s.getBytes("UTF-8"));
             StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b & 0xff));
-            }
+            for (byte b : digest) sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             return "";
         }
     }
 
-    private String sha1(String input) {
+    private String sha1(String s) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = md.digest(s.getBytes("UTF-8"));
             StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b & 0xff));
-            }
+            for (byte b : digest) sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             return "";
         }
     }
 
-    private String toQueryString(Map<String, String> params) {
+    private String toQueryString(LinkedHashMap<String, String> params) {
         StringBuilder sb = new StringBuilder();
-        boolean first = true;
         for (Map.Entry<String, String> entry : params.entrySet()) {
-            String val = entry.getValue();
-            if (val != null && !val.trim().isEmpty()) {
-                if (!first) sb.append("&");
-                sb.append(entry.getKey()).append("=").append(val);
-                first = false;
+            if (entry.getValue() != null && !entry.getValue().isEmpty()) {
+                if (sb.length() > 0) sb.append("&");
+                sb.append(entry.getKey()).append("=").append(entry.getValue());
             }
         }
         return sb.toString();
     }
 
-    private Map<String, String> getHeaders(Map<String, String> params) {
-        if (params == null) params = new HashMap<>();
+    private HashMap<String, String> getHeaders(LinkedHashMap<String, String> params) {
         String t = String.valueOf(System.currentTimeMillis());
-
-        Map<String, String> signParams = new HashMap<>(params);
+        // 保证参数拼装顺序不变，按照 JS 的 { ...params, key, t }
+        LinkedHashMap<String, String> signParams = new LinkedHashMap<>(params);
         signParams.put("key", KEY);
         signParams.put("t", t);
 
-        String queryString = toQueryString(signParams);
-        String sign = sha1(md5(queryString));
+        String sign = sha1(md5(toQueryString(signParams)));
 
-        Map<String, String> headers = new HashMap<>();
+        HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", USER_AGENT);
         headers.put("Accept", "application/json, text/plain, */*");
         headers.put("sign", sign);
         headers.put("t", t);
-        headers.put("deviceid", DEVICE_ID);
+        headers.put("deviceid", UUID.randomUUID().toString());
         return headers;
     }
 
-    private String normalizeFieldName(String key) {
-        String l = key.toLowerCase();
+    private String normalizeFieldName(String k) {
+        String l = k.toLowerCase();
         if (l.startsWith("vod") && l.length() > 3) return "vod_" + l.substring(3);
         if (l.startsWith("type") && l.length() > 4) return "type_" + l.substring(4);
         return l;
     }
 
-    private JSONObject normalizeVodItem(JSONObject item) {
-        JSONObject res = new JSONObject();
-        if (item == null) return res;
-        try {
+    private JSONArray normalizeVodList(JSONArray list) throws Exception {
+        JSONArray result = new JSONArray();
+        if (list == null) return result;
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject item = list.optJSONObject(i);
+            if (item == null) continue;
+            JSONObject resItem = new JSONObject();
             Iterator<String> keys = item.keys();
             while (keys.hasNext()) {
                 String k = keys.next();
-                if (!item.isNull(k)) {
-                    res.put(normalizeFieldName(k), item.get(k));
+                Object v = item.opt(k);
+                if (v != null && !JSONObject.NULL.equals(v)) {
+                    resItem.put(normalizeFieldName(k), v);
                 }
             }
-        } catch (Exception e) {
-            SpiderDebug.log(e);
+            result.put(resItem);
         }
-        return res;
+        return result;
     }
 
-    private JSONArray normalizeVodList(JSONArray list) {
-        JSONArray res = new JSONArray();
-        if (list == null) return res;
+    private JSONObject reqSafe(String url, HashMap<String, String> headers) {
         try {
+            Request.Builder builder = new Request.Builder().url(url).get();
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                builder.addHeader(entry.getKey(), entry.getValue());
+            }
+            Response response = client.newCall(builder.build()).execute();
+            if (response.isSuccessful() && response.body() != null) {
+                return new JSONObject(response.body().string());
+            }
+        } catch (Exception e) {
+            // Ignored as per JS catch
+        }
+        return new JSONObject();
+    }
+
+    @Override
+    public String homeContent(boolean filter) throws Exception {
+        JSONObject cRes = reqSafe(HOST + "/api/mw-movie/anonymous/get/filer/type", getHeaders(new LinkedHashMap<>()));
+        JSONObject fRes = reqSafe(HOST + "/api/mw-movie/anonymous/v1/get/filer/list", getHeaders(new LinkedHashMap<>()));
+
+        JSONArray cData = cRes.optJSONArray("data");
+        JSONArray classes = new JSONArray();
+        if (cData != null) {
+            for (int i = 0; i < cData.length(); i++) {
+                JSONObject k = cData.optJSONObject(i);
+                JSONObject c = new JSONObject();
+                c.put("type_name", k.optString("typeName"));
+                c.put("type_id", k.optString("typeId"));
+                classes.put(c);
+            }
+        }
+
+        JSONObject fData = fRes.optJSONObject("data");
+        JSONObject filters = new JSONObject();
+
+        JSONArray baseSort = new JSONArray();
+        baseSort.put(new JSONObject().put("n", "最近更新").put("v", "2"));
+        baseSort.put(new JSONObject().put("n", "人气高低").put("v", "3"));
+        baseSort.put(new JSONObject().put("n", "评分高低").put("v", "4"));
+
+        JSONArray baseSortSlice = new JSONArray();
+        baseSortSlice.put(new JSONObject().put("n", "人气高低").put("v", "3"));
+        baseSortSlice.put(new JSONObject().put("n", "评分高低").put("v", "4"));
+
+        if (fData != null) {
+            Iterator<String> keys = fData.keys();
+            while (keys.hasNext()) {
+                String tid = keys.next();
+                JSONObject d = fData.optJSONObject(tid);
+                if (d == null) continue;
+
+                JSONArray currentSortValues = "1".equals(tid) ? baseSortSlice : baseSort;
+                JSONArray arr = new JSONArray();
+
+                if (d.has("typeList")) {
+                    JSONArray typeList = d.optJSONArray("typeList");
+                    JSONObject f = new JSONObject().put("key", "type").put("name", "类型");
+                    JSONArray vals = new JSONArray();
+                    for (int i = 0; typeList != null && i < typeList.length(); i++)
+                        vals.put(new JSONObject().put("n", typeList.optJSONObject(i).optString("itemText")).put("v", typeList.optJSONObject(i).optString("itemValue")));
+                    arr.put(f.put("value", vals));
+                }
+
+                if (d.has("plotList") && d.optJSONArray("plotList").length() > 0) {
+                    JSONArray plotList = d.optJSONArray("plotList");
+                    JSONObject f = new JSONObject().put("key", "v_class").put("name", "剧情");
+                    JSONArray vals = new JSONArray();
+                    for (int i = 0; i < plotList.length(); i++)
+                        vals.put(new JSONObject().put("n", plotList.optJSONObject(i).optString("itemText")).put("v", plotList.optJSONObject(i).optString("itemText")));
+                    arr.put(f.put("value", vals));
+                }
+
+                if (d.has("districtList")) {
+                    JSONArray districtList = d.optJSONArray("districtList");
+                    JSONObject f = new JSONObject().put("key", "area").put("name", "地区");
+                    JSONArray vals = new JSONArray();
+                    for (int i = 0; districtList != null && i < districtList.length(); i++)
+                        vals.put(new JSONObject().put("n", districtList.optJSONObject(i).optString("itemText")).put("v", districtList.optJSONObject(i).optString("itemText")));
+                    arr.put(f.put("value", vals));
+                }
+
+                if (d.has("yearList")) {
+                    JSONArray yearList = d.optJSONArray("yearList");
+                    JSONObject f = new JSONObject().put("key", "year").put("name", "年份");
+                    JSONArray vals = new JSONArray();
+                    for (int i = 0; yearList != null && i < yearList.length(); i++)
+                        vals.put(new JSONObject().put("n", yearList.optJSONObject(i).optString("itemText")).put("v", yearList.optJSONObject(i).optString("itemText")));
+                    arr.put(f.put("value", vals));
+                }
+
+                if (d.has("languageList")) {
+                    JSONArray languageList = d.optJSONArray("languageList");
+                    JSONObject f = new JSONObject().put("key", "lang").put("name", "语言");
+                    JSONArray vals = new JSONArray();
+                    for (int i = 0; languageList != null && i < languageList.length(); i++)
+                        vals.put(new JSONObject().put("n", languageList.optJSONObject(i).optString("itemText")).put("v", languageList.optJSONObject(i).optString("itemText")));
+                    arr.put(f.put("value", vals));
+                }
+
+                arr.put(new JSONObject().put("key", "sort").put("name", "排序").put("value", currentSortValues));
+                filters.put(tid, arr);
+            }
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("class", classes);
+        result.put("filters", filters);
+        return result.toString();
+    }
+
+    @Override
+    public String homeVideoContent() throws Exception {
+        JSONObject r1 = reqSafe(HOST + "/api/mw-movie/anonymous/v1/home/all/list", getHeaders(new LinkedHashMap<>()));
+        JSONObject r2 = reqSafe(HOST + "/api/mw-movie/anonymous/home/hotSearch", getHeaders(new LinkedHashMap<>()));
+
+        JSONArray list = new JSONArray();
+        JSONObject data1 = r1.optJSONObject("data");
+        if (data1 != null) {
+            Iterator<String> keys = data1.keys();
+            while (keys.hasNext()) {
+                JSONObject obj = data1.optJSONObject(keys.next());
+                if (obj != null && obj.has("list")) {
+                    JSONArray gList = obj.optJSONArray("list");
+                    for (int i = 0; gList != null && i < gList.length(); i++) list.put(gList.optJSONObject(i));
+                }
+            }
+        }
+
+        JSONArray data2 = r2.optJSONArray("data");
+        if (data2 != null) {
+            for (int i = 0; i < data2.length(); i++) list.put(data2.optJSONObject(i));
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("list", normalizeVodList(list));
+        return result.toString();
+    }
+
+    @Override
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        LinkedHashMap<String, String> params = new LinkedHashMap<>();
+        params.put("area", extend != null && extend.containsKey("area") ? extend.get("area") : "");
+        params.put("filterStatus", "1");
+        params.put("lang", extend != null && extend.containsKey("lang") ? extend.get("lang") : "");
+        params.put("pageNum", pg);
+        params.put("pageSize", "30");
+        params.put("sort", extend != null && extend.containsKey("sort") ? extend.get("sort") : "1");
+        params.put("sortBy", "1");
+        params.put("type", extend != null && extend.containsKey("type") ? extend.get("type") : "");
+        params.put("type1", tid);
+        params.put("v_class", extend != null && extend.containsKey("v_class") ? extend.get("v_class") : "");
+        params.put("year", extend != null && extend.containsKey("year") ? extend.get("year") : "");
+
+        String url = HOST + "/api/mw-movie/anonymous/video/list?" + toQueryString(params);
+        JSONObject res = reqSafe(url, getHeaders(params));
+        
+        JSONObject data = res.optJSONObject("data");
+        JSONArray vodList = normalizeVodList(data != null ? data.optJSONArray("list") : new JSONArray());
+
+        JSONObject result = new JSONObject();
+        result.put("list", vodList);
+        result.put("page", Integer.parseInt(pg));
+        result.put("pagecount", 9999);
+        result.put("limit", 90);
+        result.put("total", 999999);
+        return result.toString();
+    }
+
+    @Override
+    public String detailContent(List<String> ids) throws Exception {
+        String id = ids.get(0);
+        LinkedHashMap<String, String> params = new LinkedHashMap<>();
+        params.put("id", id);
+
+        String url = HOST + "/api/mw-movie/anonymous/video/detail?id=" + id;
+        JSONObject res = reqSafe(url, getHeaders(params));
+        
+        JSONObject data = res.optJSONObject("data");
+        JSONArray wrapper = new JSONArray();
+        if (data != null) wrapper.put(data);
+
+        JSONArray normalized = normalizeVodList(wrapper);
+        if (normalized.length() == 0) {
+            JSONObject err = new JSONObject();
+            err.put("vod_id", id);
+            err.put("vod_name", "加载失败");
+            err.put("vod_play_url", "");
+            return new JSONObject().put("list", new JSONArray().put(err)).toString();
+        }
+
+        JSONObject vod = normalized.optJSONObject(0);
+        vod.put("vod_play_from", "多多APP");
+
+        JSONArray episodelist = vod.optJSONArray("episodelist"); // Normalize转换为全小写了
+        if (episodelist != null && episodelist.length() > 0) {
+            List<String> eps = new ArrayList<>();
+            for (int i = 0; i < episodelist.length(); i++) {
+                JSONObject ep = episodelist.optJSONObject(i);
+                String name = ep.optString("name");
+                if (name.length() == 1) name = "0" + name; // padding
+                String nid = ep.optString("nid");
+                eps.add(name + "$" + id + "-" + nid);
+            }
+            vod.put("vod_play_url", TextUtils.join("#", eps));
+            vod.remove("episodelist");
+        }
+
+        return new JSONObject().put("list", new JSONArray().put(vod)).toString();
+    }
+
+    @Override
+    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        String[] parts = id.split("-");
+        String vid = parts[0];
+        String nid = parts[1];
+
+        LinkedHashMap<String, String> params = new LinkedHashMap<>();
+        params.put("clientType", "1");
+        params.put("id", vid);
+        params.put("nid", nid);
+
+        String url = HOST + "/api/mw-movie/anonymous/v2/video/episode/url?clientType=1&id=" + vid + "&nid=" + nid;
+        JSONObject res = reqSafe(url, getHeaders(params));
+
+        JSONObject data = res.optJSONObject("data");
+        JSONArray list = data != null ? data.optJSONArray("list") : new JSONArray();
+
+        JSONArray urls = new JSONArray();
+        if (list != null) {
             for (int i = 0; i < list.length(); i++) {
                 JSONObject item = list.optJSONObject(i);
-                if (item != null) {
-                    res.put(normalizeVodItem(item));
-                }
+                urls.put(item.optString("resolutionName"));
+                urls.put(item.optString("url"));
             }
-        } catch (Exception e) {
-            SpiderDebug.log(e);
         }
-        return res;
-    }
 
-    private JSONObject reqSafe(String url, Map<String, String> params) {
-        try {
-            Map<String, String> headers = getHeaders(params);
-            String content = OkHttp.string(url, headers);
-            return new JSONObject(content);
-        } catch (Exception e) {
-            return new JSONObject();
-        }
-    }
+        JSONObject header = new JSONObject();
+        header.put("User-Agent", USER_AGENT);
+        header.put("sec-ch-ua-platform", "\"Windows\"");
+        header.put("DNT", "1");
+        header.put("sec-ch-ua", "\"Not/A)Brand\";v=\"8\", \"Chromium\";v=\"131\", \"Google Chrome\";v=\"131\"");
+        header.put("sec-ch-ua-mobile", "?0");
+        header.put("Origin", HOST);
+        header.put("Referer", HOST + "/");
 
-    // ==================== 业务接口实现 ====================
-
-    @Override
-    public String homeContent(boolean filter) {
-        try {
-            // 1. 获取分类
-            String typeUrl = currentHost + "/api/mw-movie/anonymous/get/filer/type";
-            JSONObject cRes = reqSafe(typeUrl, null);
-            JSONArray cData = cRes.optJSONArray("data");
-
-            JSONArray classes = new JSONArray();
-            if (cData != null) {
-                for (int i = 0; i < cData.length(); i++) {
-                    JSONObject k = cData.getJSONObject(i);
-                    JSONObject cls = new JSONObject();
-                    cls.put("type_name", k.optString("typeName"));
-                    cls.put("type_id", k.optString("typeId"));
-                    classes.put(cls);
-                }
-            }
-
-            // 2. 获取筛选列表
-            String filterUrl = currentHost + "/api/mw-movie/anonymous/v1/get/filer/list";
-            JSONObject fRes = reqSafe(filterUrl, null);
-            JSONObject fData = fRes.optJSONObject("data");
-
-            JSONObject filters = new JSONObject();
-            if (fData != null) {
-                JSONArray baseSort = new JSONArray();
-                baseSort.put(new JSONObject().put("n", "最近更新").put("v", "2"));
-                baseSort.put(new JSONObject().put("n", "人气高低").put("v", "3"));
-                baseSort.put(new JSONObject().put("n", "评分高低").put("v", "4"));
-
-                Iterator<String> tids = fData.keys();
-                while (tids.hasNext()) {
-                    String tid = tids.next();
-                    JSONObject d = fData.optJSONObject(tid);
-                    if (d == null) continue;
-
-                    JSONArray currentSortValues = new JSONArray();
-                    int startIdx = "1".equals(tid) ? 1 : 0;
-                    for (int i = startIdx; i < baseSort.length(); i++) {
-                        currentSortValues.put(baseSort.get(i));
-                    }
-
-                    JSONArray arr = new JSONArray();
-
-                    // 类型
-                    JSONArray typeList = d.optJSONArray("typeList");
-                    if (typeList != null) {
-                        JSONArray typeArr = new JSONArray();
-                        for (int i = 0; i < typeList.length(); i++) {
-                            JSONObject item = typeList.getJSONObject(i);
-                            typeArr.put(new JSONObject().put("n", item.optString("itemText")).put("v", item.optString("itemValue")));
-                        }
-                        arr.put(new JSONObject().put("key", "type").put("name", "类型").put("value", typeArr));
-                    }
-
-                    // 剧情
-                    JSONArray plotList = d.optJSONArray("plotList");
-                    if (plotList != null && plotList.length() > 0) {
-                        JSONArray plotArr = new JSONArray();
-                        for (int i = 0; i < plotList.length(); i++) {
-                            JSONObject item = plotList.getJSONObject(i);
-                            plotArr.put(new JSONObject().put("n", item.optString("itemText")).put("v", item.optString("itemText")));
-                        }
-                        arr.put(new JSONObject().put("key", "v_class").put("name", "剧情").put("value", plotArr));
-                    }
-
-                    // 地区
-                    JSONArray districtList = d.optJSONArray("districtList");
-                    if (districtList != null) {
-                        JSONArray distArr = new JSONArray();
-                        for (int i = 0; i < districtList.length(); i++) {
-                            JSONObject item = districtList.getJSONObject(i);
-                            distArr.put(new JSONObject().put("n", item.optString("itemText")).put("v", item.optString("itemText")));
-                        }
-                        arr.put(new JSONObject().put("key", "area").put("name", "地区").put("value", distArr));
-                    }
-
-                    // 年份
-                    JSONArray yearList = d.optJSONArray("yearList");
-                    if (yearList != null) {
-                        JSONArray yearArr = new JSONArray();
-                        for (int i = 0; i < yearList.length(); i++) {
-                            JSONObject item = yearList.getJSONObject(i);
-                            yearArr.put(new JSONObject().put("n", item.optString("itemText")).put("v", item.optString("itemText")));
-                        }
-                        arr.put(new JSONObject().put("key", "year").put("name", "年份").put("value", yearArr));
-                    }
-
-                    // 语言
-                    JSONArray languageList = d.optJSONArray("languageList");
-                    if (languageList != null) {
-                        JSONArray langArr = new JSONArray();
-                        for (int i = 0; i < languageList.length(); i++) {
-                            JSONObject item = languageList.getJSONObject(i);
-                            langArr.put(new JSONObject().put("n", item.optString("itemText")).put("v", item.optString("itemText")));
-                        }
-                        arr.put(new JSONObject().put("key", "lang").put("name", "语言").put("value", langArr));
-                    }
-
-                    // 排序
-                    arr.put(new JSONObject().put("key", "sort").put("name", "排序").put("value", currentSortValues));
-
-                    filters.put(tid, arr);
-                }
-            }
-
-            // 3. 首页推荐列表 (对应 JS 中的 homeVod)
-            JSONArray rawList = new JSONArray();
-            JSONObject r1 = reqSafe(currentHost + "/api/mw-movie/anonymous/v1/home/all/list", null);
-            JSONObject data1 = r1.optJSONObject("data");
-            if (data1 != null) {
-                Iterator<String> keys = data1.keys();
-                while (keys.hasNext()) {
-                    JSONObject obj = data1.optJSONObject(keys.next());
-                    if (obj != null && obj.has("list")) {
-                        JSONArray subList = obj.optJSONArray("list");
-                        if (subList != null) {
-                            for (int i = 0; i < subList.length(); i++) {
-                                rawList.put(subList.get(i));
-                            }
-                        }
-                    }
-                }
-            }
-
-            JSONObject r2 = reqSafe(currentHost + "/api/mw-movie/anonymous/home/hotSearch", null);
-            JSONArray data2 = r2.optJSONArray("data");
-            if (data2 != null) {
-                for (int i = 0; i < data2.length(); i++) {
-                    rawList.put(data2.get(i));
-                }
-            }
-
-            JSONObject result = new JSONObject();
-            result.put("class", classes);
-            result.put("filters", filters);
-            result.put("list", normalizeVodList(rawList));
-            return result.toString();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
+        JSONObject result = new JSONObject();
+        result.put("parse", 0);
+        // 如果环境支持多线路可以直接传 JSONArray，否则兜底回退为提取第一个线路的纯字符串格式
+        result.put("url", urls.length() > 0 ? urls : ""); 
+        result.put("header", header);
+        return result.toString();
     }
 
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
-        try {
-            if (extend == null) extend = new HashMap<>();
+    public String searchContent(String key, boolean quick) throws Exception {
+        LinkedHashMap<String, String> params = new LinkedHashMap<>();
+        params.put("keyword", key);
+        params.put("pageNum", "1");
+        params.put("pageSize", "8");
+        params.put("sourceCode", "1");
 
-            Map<String, String> params = new HashMap<>();
-            params.put("area", extend.get("area") != null ? extend.get("area") : "");
-            params.put("filterStatus", "1");
-            params.put("lang", extend.get("lang") != null ? extend.get("lang") : "");
-            params.put("pageNum", pg);
-            params.put("pageSize", "30");
-            params.put("sort", extend.get("sort") != null ? extend.get("sort") : "1");
-            params.put("sortBy", "1");
-            params.put("type", extend.get("type") != null ? extend.get("type") : "");
-            params.put("type1", tid);
-            params.put("v_class", extend.get("v_class") != null ? extend.get("v_class") : "");
-            params.put("year", extend.get("year") != null ? extend.get("year") : "");
+        String url = HOST + "/api/mw-movie/anonymous/video/searchByWord?" + toQueryString(params);
+        JSONObject res = reqSafe(url, getHeaders(params));
 
-            String url = currentHost + "/api/mw-movie/anonymous/video/list?" + toQueryString(params);
-            JSONObject res = reqSafe(url, params);
+        JSONObject data = res.optJSONObject("data");
+        JSONObject resultData = data != null ? data.optJSONObject("result") : null;
+        JSONArray list = resultData != null ? resultData.optJSONArray("list") : new JSONArray();
 
-            JSONArray rawList = null;
-            JSONObject data = res.optJSONObject("data");
-            if (data != null) rawList = data.optJSONArray("list");
-
-            JSONObject result = new JSONObject();
-            result.put("list", normalizeVodList(rawList));
-            result.put("page", Integer.parseInt(pg));
-            result.put("pagecount", 9999);
-            result.put("limit", 90);
-            result.put("total", 999999);
-            return result.toString();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
-    }
-
-    @Override
-    public String detailContent(List<String> ids) {
-        try {
-            String id = ids.get(0);
-            Map<String, String> params = new HashMap<>();
-            params.put("id", id);
-
-            String url = currentHost + "/api/mw-movie/anonymous/video/detail?id=" + id;
-            JSONObject res = reqSafe(url, params);
-
-            JSONObject rawVod = res.optJSONObject("data");
-            if (rawVod == null) {
-                JSONObject failVod = new JSONObject();
-                failVod.put("vod_id", id);
-                failVod.put("vod_name", "加载失败");
-                failVod.put("vod_play_url", "");
-
-                JSONObject result = new JSONObject();
-                result.put("list", new JSONArray().put(failVod));
-                return result.toString();
-            }
-
-            JSONObject vod = normalizeVodItem(rawVod);
-            vod.put("vod_play_from", "多多APP");
-
-            JSONArray episodelist = rawVod.optJSONArray("episodelist");
-            if (episodelist != null && episodelist.length() > 0) {
-                StringBuilder playUrlSb = new StringBuilder();
-                for (int i = 0; i < episodelist.length(); i++) {
-                    JSONObject ep = episodelist.getJSONObject(i);
-                    String name = ep.optString("name");
-                    String nid = ep.optString("nid");
-
-                    // JS 逻辑: ep.name.padStart(2, '0')
-                    if (name.length() < 2) name = "0" + name;
-
-                    if (i > 0) playUrlSb.append("#");
-                    playUrlSb.append(name).append("$").append(id).append("-").append(nid);
-                }
-                vod.put("vod_play_url", playUrlSb.toString());
-            }
-
-            JSONObject result = new JSONObject();
-            result.put("list", new JSONArray().put(vod));
-            return result.toString();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
-    }
-
-    @Override
-    public String playerContent(String flag, String id, List<String> vipFlags) {
-        try {
-            String[] parts = id.split("-");
-            String vid = parts[0];
-            String nid = parts.length > 1 ? parts[1] : "";
-
-            Map<String, String> params = new HashMap<>();
-            params.put("clientType", "1");
-            params.put("id", vid);
-            params.put("nid", nid);
-
-            String url = currentHost + "/api/mw-movie/anonymous/v2/video/episode/url?clientType=1&id=" + vid + "&nid=" + nid;
-            JSONObject res = reqSafe(url, params);
-
-            JSONObject data = res.optJSONObject("data");
-            JSONArray rawList = data != null ? data.optJSONArray("list") : null;
-
-            JSONArray urls = new JSONArray();
-            if (rawList != null) {
-                for (int i = 0; i < rawList.length(); i++) {
-                    JSONObject item = rawList.getJSONObject(i);
-                    urls.put(item.optString("resolutionName"));
-                    urls.put(item.optString("url"));
-                }
-            }
-
-            JSONObject headers = new JSONObject();
-            headers.put("User-Agent", USER_AGENT);
-            headers.put("sec-ch-ua-platform", "\"Windows\"");
-            headers.put("DNT", "1");
-            headers.put("sec-ch-ua", "\"Not/A)Brand\";v=\"8\", \"Chromium\";v=\"131\", \"Google Chrome\";v=\"131\"");
-            headers.put("sec-ch-ua-mobile", "?0");
-            headers.put("Origin", currentHost);
-            headers.put("Referer", currentHost + "/");
-
-            JSONObject result = new JSONObject();
-            result.put("parse", 0);
-            result.put("url", urls);
-            result.put("header", headers);
-            return result.toString();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
-    }
-
-    @Override
-    public String searchContent(String key, boolean quick) {
-        return searchContent(key, quick, "1");
-    }
-
-    public String searchContent(String key, boolean quick, String pg) {
-        try {
-            Map<String, String> params = new HashMap<>();
-            params.put("keyword", key);
-            params.put("pageNum", pg);
-            params.put("pageSize", "8");
-            params.put("sourceCode", "1");
-
-            String url = currentHost + "/api/mw-movie/anonymous/video/searchByWord?keyword="
-                    + URLEncoder.encode(key, "UTF-8")
-                    + "&pageNum=" + pg
-                    + "&pageSize=8&sourceCode=1";
-
-            JSONObject res = reqSafe(url, params);
-
-            JSONArray rawList = null;
-            JSONObject data = res.optJSONObject("data");
-            if (data != null) {
-                JSONObject resultObj = data.optJSONObject("result");
-                if (resultObj != null) {
-                    rawList = resultObj.optJSONArray("list");
-                }
-            }
-
-            JSONObject result = new JSONObject();
-            result.put("list", normalizeVodList(rawList));
-            result.put("page", Integer.parseInt(pg));
-            return result.toString();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-        }
-        return "";
+        JSONObject result = new JSONObject();
+        result.put("list", normalizeVodList(list));
+        result.put("page", 1);
+        return result.toString();
     }
 }
