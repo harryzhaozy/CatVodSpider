@@ -27,8 +27,7 @@ public class Wencai extends Spider {
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .build();
-        }
-        cath(Exception e)
+        } catch (Exception e)
             {
              e.printStackTrace();
             }
