@@ -146,44 +146,52 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
 
         if (json != null && !json.trim().isEmpty()) {
-            // 文本清洗：去高亮标签、补全图片 https 协议
-            json = json.replaceAll("<[^>]*>", "").replaceAll("\"//", "\"https://");
-
             try {
                 com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
                 if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
                     com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
                     if (data.has("result") && data.get("result").isJsonArray()) {
                         com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
-
-                        // 实例化一个全局 Gson，专门用于安全的模型反序列化
                         com.google.gson.Gson gson = new com.google.gson.Gson();
 
                         for (com.google.gson.JsonElement element : resultArray) {
                             if (!element.isJsonObject()) continue;
                             com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
-                            // 过滤只保留视频卡片
                             if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                                
-                                // 构造符合 Vod 类 SerializedName 的标准 JsonObject
                                 com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
                                 
+                                // 1. 严格按照 detailContent 的要求拼接 bvid@aid 解决点击空白问题
                                 String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
-                                String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
-                                String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
-                                String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
+                                String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
+                                String vodId = bvid + "@" + aid;
 
+                                // 2. 精细清洗标题中的所有 HTML 标签与实体字符
+                                String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+                                if (!title.isEmpty()) {
+                                    title = title.replaceAll("<[^>]*>", "")
+                                                 .replaceAll("&quot;", "\"")
+                                                 .replaceAll("&amp;", "&")
+                                                 .replaceAll("&lt;", "<")
+                                                 .replaceAll("&gt;", ">")
+                                                 .replaceAll("&nbsp;", " ");
+                                }
+
+                                // 3. 图片路径补全协议头
+                                String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
                                 if (pic.startsWith("//")) {
                                     pic = "https:" + pic;
                                 }
 
-                                vodJson.addProperty("vod_id", bvid);
+                                // 4. 时长备注
+                                String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
+
+                                // 装配成符合 Vod 序列化注解的 JsonObject
+                                vodJson.addProperty("vod_id", vodId);
                                 vodJson.addProperty("vod_name", title);
                                 vodJson.addProperty("vod_pic", pic);
                                 vodJson.addProperty("vod_remarks", durationStr);
 
-                                // 直接使用 Gson 映射为 Vod 对象，无需调用任何字段或 Setter 方法！
                                 Vod vod = gson.fromJson(vodJson, Vod.class);
                                 if (vod != null) {
                                     list.add(vod);
