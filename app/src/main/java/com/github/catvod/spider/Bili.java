@@ -403,10 +403,9 @@ public class Bili extends Spider {
             }
 
             String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey;
-            okhttp3.Response response = OkHttp.newCall(api, getHeader()).execute();
-            String json = response.body().string();
+            String json = OkHttp.string(api, getHeader());
 
-            if (json != null && !json.isEmpty()) {
+            if (!TextUtils.isEmpty(json)) {
                 JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
                 if (jsonObject.has("data")) {
                     JsonObject data = jsonObject.getAsJsonObject("data");
@@ -414,31 +413,42 @@ public class Bili extends Spider {
                     String message = data.get("message").getAsString();
 
                     if (code == 0) {
-                        // 扫码成功：提取 HTTP Header 响应头中的 Set-Cookie
-                        List<String> headers = response.headers("Set-Cookie");
-                        StringBuilder newCookie = new StringBuilder();
-                        for (String header : headers) {
-                            String cookiePair = header.split(";")[0];
-                            newCookie.append(cookiePair).append("; ");
+                        // 登录成功：直接从返回 JSON 的 url 字段中解析 Cookie 参数
+                        if (data.has("url")) {
+                            String redirectUrl = data.get("url").getAsString();
+                            StringBuilder newCookie = new StringBuilder();
+                            
+                            // 解析 url 问号后面的参数并提取 SESSDATA, bili_jct, DedeUserID 等
+                            if (redirectUrl.contains("?")) {
+                                String queryString = redirectUrl.substring(redirectUrl.indexOf("?") + 1);
+                                String[] params = queryString.split("&");
+                                for (String param : params) {
+                                    String[] kv = param.split("=", 2);
+                                    if (kv.length == 2) {
+                                        newCookie.append(kv[0]).append("=").append(kv[1]).append("; ");
+                                    }
+                                }
+                            }
+                            
+                            if (newCookie.length() > 0) {
+                                cookie = newCookie.toString().trim();
+                                // 持久化保存到本地文件
+                                Path.write(getCache(), cookie);
+                                login = true;
+                                SpiderDebug.log("===[Bili Login Success] Cookie saved: " + cookie);
+                            }
                         }
 
-                        cookie = newCookie.toString().trim();
-                        // 登录成功写入本地缓存，确保下次软件打开时无需重复扫码
-                        Path.write(getCache(), cookie);
-                        login = true;
-
-                        SpiderDebug.log("===[Bili Login Success] Saved Cookie to cache: " + cookie);
-
                         vod.setVodId("qrcode@success");
-                        vod.setVodName("登录成功！Cookie 已成功保存至本地");
+                        vod.setVodName("登录成功！Cookie 已保存");
                         vod.setVodRemarks("请按返回键返回列表，开始播放更高画质内容");
                         vod.setVodContent("保存的 Cookie：" + cookie);
                         return Result.string(vod);
                     } else {
-                        // 未扫码/已过期等
+                        // 未扫码/已过期/未确认等状态
                         vod.setVodId("qrcode@" + qrcodeKey);
                         vod.setVodName("扫码状态：" + message);
-                        vod.setVodRemarks("请在电视上重新点击尝试，若二维码过期请返回上一级重进");
+                        vod.setVodRemarks("请在手机上确认登录后，在此重新点击尝试");
                         return Result.string(vod);
                     }
                 }
