@@ -107,8 +107,6 @@ public class Bili extends Spider {
         return Result.string(list);
     }
 
-    
-
 @Override
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
     if (tid.endsWith("/{pg}")) {
@@ -116,12 +114,12 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         params.put("mid", tid.split("/")[0]);
         params.put("pn", pg);
         List<Vod> list = new ArrayList<>();
-        
         String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
+        
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
             com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
-            if (vlist != null && vlist.isJsonArray()) {
+            if (vlist != null) {
                 for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
                     if (item != null && item.getVod() != null) {
                         list.add(item.getVod());
@@ -131,14 +129,15 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
         return Result.string(list);
     } else {
-        // 1. 安全处理 extend，防止 NPE
+        // 1. 安全处理 extend，防止 Android 6 下报 NPE 崩溃
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 显式指定 UTF-8 编码，解决 Android 6 上 URLEncoder 编码问题
+        // 2. 修复核心问题：Android 6 的 URLEncoder.encode(tid) 默认编码会导致 URL 乱码/请求异常
+        //    显式传入 "UTF-8" 强制统一字符集
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -148,22 +147,12 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
 
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            com.google.gson.JsonElement resultElement = resp.getData().getResult();
-            if (resultElement != null && resultElement.isJsonArray()) {
-                // 使用原框架原生支持的 arrayFrom
-                List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
-                if (results != null) {
-                    for (Resp.Result item : results) {
-                        if (item == null) continue;
-                        
-                        Vod vod = item.getVod();
-                        if (vod == null) continue;
-
-                        // 核心过滤：B站搜索混合了 ketang（课堂），ketang 没有包含有效播放信息
-                        // 通过判断转出的 Vod 关键属性是否均为空，跳过非视频卡片
-                        if (vod.getVodName() == null && vod.getVodPic() == null) continue;
-
-                        list.add(vod);
+            // 保持与你原始代码完全一致的 arrayFrom 和 item.getVod() 提取逻辑
+            List<Resp.Result> results = Resp.Result.arrayFrom(resp.getData().getResult());
+            if (results != null) {
+                for (Resp.Result item : results) {
+                    if (item != null && item.getVod() != null) {
+                        list.add(item.getVod());
                     }
                 }
             }
@@ -171,6 +160,8 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         return Result.string(list);
     }
 }
+
+
     
     @Override
     public String detailContent(List<String> ids) throws Exception {
