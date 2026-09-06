@@ -114,43 +114,42 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         params.put("mid", tid.split("/")[0]);
         params.put("pn", pg);
         List<Vod> list = new ArrayList<>();
-        String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
         
+        String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-            com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
-            if (vlist != null) {
-                for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
-                    if (item != null && item.getVod() != null) {
-                        list.add(item.getVod());
-                    }
+            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList().getAsJsonObject().get("vlist"))) {
+                if (item != null && item.getVod() != null) {
+                    list.add(item.getVod());
                 }
             }
         }
         return Result.string(list);
     } else {
-        // 1. 安全处理 extend，防止 Android 6 下报 NPE 崩溃
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 修复核心问题：Android 6 的 URLEncoder.encode(tid) 默认编码会导致 URL 乱码/请求异常
-        //    显式传入 "UTF-8" 强制统一字符集
+        // 显式指定 UTF-8，解决 Android 6 上 URLEncoder 的字符集兼容问题
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
 
         String json = OkHttp.string(api, getHeader());
-        Resp resp = Resp.objectFrom(json);
         List<Vod> list = new ArrayList<>();
 
+        Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            // 保持与你原始代码完全一致的 arrayFrom 和 item.getVod() 提取逻辑
-            List<Resp.Result> results = Resp.Result.arrayFrom(resp.getData().getResult());
-            if (results != null) {
-                for (Resp.Result item : results) {
+            // 在 Android 6 上，将 result 数组转为 JsonArray 逐项解析，避免单个 ketang 课程节点卡死全局
+            for (com.google.gson.JsonElement element : resp.getData().getResult().getAsJsonArray()) {
+                if (!element.isJsonObject()) continue;
+                com.google.gson.JsonObject itemObj = element.getAsJsonObject();
+                
+                // 仅当 type 为 video 时才进行反序列化
+                if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                    Resp.Result item = Resp.Result.objectFrom(itemObj.toString());
                     if (item != null && item.getVod() != null) {
                         list.add(item.getVod());
                     }
