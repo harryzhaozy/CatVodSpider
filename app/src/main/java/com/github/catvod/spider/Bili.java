@@ -109,7 +109,7 @@ public class Bili extends Spider {
 
 
 
-@Override
+    @Override
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
     if (tid.endsWith("/{pg}")) {
         LinkedHashMap<String, Object> params = new LinkedHashMap<>();
@@ -148,7 +148,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
 
         if (json != null && !json.trim().isEmpty()) {
-            // 清理 HTML 高亮标签与协议头
+            // 清理 HTML 标签与协议头
             json = json.replaceAll("<[^>]*>", "").replaceAll("\"//", "\"https://");
 
             try {
@@ -166,7 +166,6 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
                             if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
                                 Vod vod = new Vod();
                                 
-                                // 直接手动读取核心字段，给 Vod 属性赋值，避开底层 item.getVod() 崩溃
                                 String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                                 String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
                                 String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
@@ -176,11 +175,11 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
                                     pic = "https:" + pic;
                                 }
 
-                                // 赋值给 CatVod Vod 对象的成员变量
-                                vod.vod_id = bvid;
-                                vod.vod_name = title;
-                                vod.vod_pic = pic;
-                                vod.vod_remarks = durationStr;
+                                // 修正为驼峰命名的成员变量（完全避开导致 com.github.catvod.spider.merge.I0.o 崩溃的 item.getVod()）
+                                vod.vodId = bvid;
+                                vod.vodName = title;
+                                vod.vodPic = pic;
+                                vod.vodRemarks = durationStr;
 
                                 list.add(vod);
                             }
