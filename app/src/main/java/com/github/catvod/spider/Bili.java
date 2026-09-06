@@ -119,9 +119,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         
         String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
         if (json != null && !json.isEmpty()) {
-            // 通配替换：将所有协议相对路径 "//" 统一补全为 "https://"
             json = json.replaceAll("\"//", "\"https://");
-            
             Resp resp = Resp.objectFrom(json);
             if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
                 com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
@@ -136,14 +134,12 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
         return Result.string(list);
     } else {
-        // 1. 安全判空 extend，防止 Android 6 NPE 崩溃
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 显式 UTF-8 编码，解决 Android 6 URLEncoder 字符集兼容问题
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -151,29 +147,63 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         String json = OkHttp.string(api, getHeader());
         List<Vod> list = new ArrayList<>();
 
-        if (json != null && !json.trim().isEmpty()) {
-            // 3. 通配清洗 1：移除 B站 搜索高亮标签 <em class="...">
-            json = json.replaceAll("<[^>]*>", "");
-            
-            // 4. 通配清洗 2：通配匹配替换所有无协议头的 URL（"//hdslb.com..." -> "https://hdslb.com..."）
-            json = json.replaceAll("\"//", "\"https://");
+        // 【验证 1】：打印请求的 API URL 和 原始 JSON 长度
+        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] API: " + api);
+        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] RAW JSON Length: " + (json != null ? json.length() : "NULL"));
 
-            Resp resp = Resp.objectFrom(json);
-            if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-                com.google.gson.JsonElement resultElement = resp.getData().getResult();
-                if (resultElement.isJsonArray()) {
-                    List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
-                    if (results != null) {
-                        for (Resp.Result item : results) {
-                            if (item != null && item.getVod() != null) {
-                                list.add(item.getVod());
+        if (json != null && !json.trim().isEmpty()) {
+            json = json.replaceAll("<[^>]*>", "").replaceAll("\"//", "\"https://");
+
+            try {
+                Resp resp = Resp.objectFrom(json);
+                // 【验证 2】：打印 Resp 及 Data 对象是否成功反序列化
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Resp parsed: " + (resp != null) 
+                    + ", Data parsed: " + (resp != null && resp.getData() != null));
+
+                if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
+                    com.google.gson.JsonElement resultElement = resp.getData().getResult();
+                    
+                    // 【验证 3】：打印 result 节点的数据类型
+                    com.google.gson.JsonArray resultArray = null;
+                    if (resultElement.isJsonArray()) {
+                        resultArray = resultElement.getAsJsonArray();
+                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Result is JsonArray, size: " + resultArray.size());
+                    } else if (resultElement.isJsonObject()) {
+                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Result is JsonObject! (Unexpected format)");
+                        if (resultElement.getAsJsonObject().has("result") && resultElement.getAsJsonObject().get("result").isJsonArray()) {
+                            resultArray = resultElement.getAsJsonObject().getAsJsonArray("result");
+                            com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Found nested JsonArray result, size: " + resultArray.size());
+                        }
+                    }
+
+                    if (resultArray != null) {
+                        List<Resp.Result> results = Resp.Result.arrayFrom(resultArray);
+                        // 【验证 4】：打印 arrayFrom 解析出的 List 长度
+                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] arrayFrom parsed count: " + (results != null ? results.size() : "NULL"));
+
+                        if (results != null) {
+                            for (Resp.Result item : results) {
+                                if (item != null && item.getVod() != null) {
+                                    list.add(item.getVod());
+                                }
                             }
                         }
                     }
+                } else {
+                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] resp.getData().getResult() is NULL");
                 }
+            } catch (Throwable t) {
+                // 【验证 5】：捕获 Android 6 上抛出的隐式崩溃异常
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Exception on Android 6: " + t.getMessage());
+                t.printStackTrace();
             }
         }
-        return Result.string(list);
+        
+        // 【验证 6】：打印最终返回给 TVBox 的 Vod 数量以及 JSON 字符串长度
+        String finalResult = Result.string(list);
+        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Final Vod count: " + list.size() + ", Final Result JSON length: " + finalResult.length());
+        
+        return finalResult;
     }
 }
     
