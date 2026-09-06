@@ -131,14 +131,14 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
         return Result.string(list);
     } else {
-        // 1. 安全处理 extend，防止 Android 6 NPE
+        // 1. 安全处理 extend，防止 NPE
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 显式指定 UTF-8 编码，解决 Android 6 上的 URLEncoder 编码问题
+        // 2. 显式指定 UTF-8 编码，解决 Android 6 上 URLEncoder 编码问题
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -150,18 +150,20 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
             com.google.gson.JsonElement resultElement = resp.getData().getResult();
             if (resultElement != null && resultElement.isJsonArray()) {
-                com.google.gson.JsonArray resultArray = resultElement.getAsJsonArray();
-                for (com.google.gson.JsonElement element : resultArray) {
-                    if (!element.isJsonObject()) continue;
-                    com.google.gson.JsonObject itemObj = element.getAsJsonObject();
-                    
-                    // 过滤非 video 类型（如 ketang 课程等导致 Android 6 解析异常的数据）[cite: 1]
-                    if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                        // 正确使用单参数的 Resp.Result.objectFrom()
-                        Resp.Result item = Resp.Result.objectFrom(itemObj.toString());
-                        if (item != null && item.getVod() != null) {
-                            list.add(item.getVod());
-                        }
+                // 使用原框架原生支持的 arrayFrom
+                List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
+                if (results != null) {
+                    for (Resp.Result item : results) {
+                        if (item == null) continue;
+                        
+                        Vod vod = item.getVod();
+                        if (vod == null) continue;
+
+                        // 核心过滤：B站搜索混合了 ketang（课堂），ketang 没有包含有效播放信息
+                        // 通过判断转出的 Vod 关键属性是否均为空，跳过非视频卡片
+                        if (vod.getVodName() == null && vod.getVodPic() == null) continue;
+
+                        list.add(vod);
                     }
                 }
             }
