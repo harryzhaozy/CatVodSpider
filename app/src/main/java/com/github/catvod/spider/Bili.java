@@ -183,12 +183,11 @@ public class Bili extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        // 修复问题一：解决登录配置生成无限多个二维码的问题
+        // 修复问题：限制只有第 1 页展示二维码卡片，第二页及以后直接返回空，解决生成无限多个码的问题
         if ("peizhi".equals(tid)) {
             if ("1".equals(pg)) {
                 return getQrCodeVodList();
             } else {
-                // 加载第二页及以后直接返回空，避免重复生成二维码
                 return Result.string(new ArrayList<Vod>());
             }
         }
@@ -311,7 +310,7 @@ public class Bili extends Spider {
                     vodJson.addProperty("vod_id", "qrcode@" + qrcodeKey);
                     vodJson.addProperty("vod_name", "【哔哩哔哩扫码登录】点击确认登录状态");
                     vodJson.addProperty("vod_pic", qrImgUrl);
-                    vodJson.addProperty("vod_remarks", "请使用 B站 App 扫码后点击此处");
+                    vodJson.addProperty("vod_remarks", "请使用 B站 App 扫码后在此点击");
 
                     Vod vod = gson.fromJson(vodJson, Vod.class);
                     if (vod != null) {
@@ -329,6 +328,7 @@ public class Bili extends Spider {
     public String detailContent(List<String> ids) throws Exception {
         String id = ids.get(0);
 
+        // 拦截扫码卡片点击，进入轮询逻辑
         if (id.startsWith("qrcode@")) {
             String qrcodeKey = id.split("@")[1];
             return checkQrCodeStatus(qrcodeKey);
@@ -354,16 +354,41 @@ public class Bili extends Spider {
 
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
-        api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
+        
+        // 已登录请求最高支持画质，未登录请求 480P (qn=30)
+        int defaultQn = login ? (isVip ? 127 : 80) : 30;
+        api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=" + defaultQn + "&fnval=4048&fourk=1";
         json = OkHttp.string(api, getHeader());
-        Data play = Resp.objectFrom(json).getData();
-        if (play != null && play.getAcceptQuality() != null) {
-            for (int i = 0; i < play.getAcceptQuality().size(); i++) {
-                int qn = play.getAcceptQuality().get(i);
-                if (!login && qn > 32) continue;
-                if (!isVip && qn > 80) continue;
-                acceptQuality.add(play.getAcceptQuality().get(i));
-                acceptDesc.add(play.getAcceptDescription().get(i));
+        
+        try {
+            Data play = Resp.objectFrom(json).getData();
+            if (play != null && play.getAcceptQuality() != null) {
+                for (int i = 0; i < play.getAcceptQuality().size(); i++) {
+                    int qn = play.getAcceptQuality().get(i);
+                    
+                    // 未登录用户保留 <= 32 的清晰度 (包含 30/480P 和 16/360P)
+                    if (!login && qn > 32) continue;
+                    // 非大会员保留 <= 80 的清晰度 (包含 1080P)
+                    if (login && !isVip && qn > 80) continue;
+                    
+                    acceptQuality.add(qn);
+                    acceptDesc.add(play.getAcceptDescription().get(i));
+                }
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Detail PlayUrl Error] " + e.getMessage());
+        }
+
+        // 保底逻辑：防空数组导致后续播放链接拼接异常
+        if (acceptQuality.isEmpty()) {
+            if (login) {
+                acceptQuality.add(80);
+                acceptDesc.add("1080P 高清");
+            } else {
+                acceptQuality.add(30);
+                acceptDesc.add("480P 清晰");
+                acceptQuality.add(16);
+                acceptDesc.add("360P 流畅");
             }
         }
 
@@ -441,14 +466,14 @@ public class Bili extends Spider {
                         }
 
                         vod.setVodId("qrcode@success");
-                        vod.setVodName("登录成功！Cookie 已保存");
-                        vod.setVodRemarks("请按返回键返回列表，开始播放更高画质内容");
+                        vod.setVodName("登录成功！Cookie 已写入缓存");
+                        vod.setVodRemarks("请按返回键返回列表，开始播放高画质内容");
                         vod.setVodContent("保存的 Cookie：" + cookie);
                         return Result.string(vod);
                     } else {
                         vod.setVodId("qrcode@" + qrcodeKey);
                         vod.setVodName("扫码状态：" + message);
-                        vod.setVodRemarks("请在手机上确认登录后，在此重新点击尝试");
+                        vod.setVodRemarks("请在手机 App 上确认登录后，再次点击尝试");
                         return Result.string(vod);
                     }
                 }
@@ -469,55 +494,44 @@ public class Bili extends Spider {
         return categoryContent(key, pg, true, new HashMap<>());
     }
 
-    // 修复问题二：修正播放代理映射与参数拼装
+    // 保持你原有的 playerContent 实现，完全不做改变
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String[] ids = id.split("\\+");
         String aid = ids[0];
         String cid = ids[1];
-        String[] acceptQuality = ids[2].split(":");
         String[] acceptDesc = ids[3].split(":");
-
+        String[] acceptQuality = ids[2].split(":");
         List<String> url = new ArrayList<>();
         String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=".concat(cid);
-
         for (int i = 0; i < acceptDesc.length; i++) {
             url.add(acceptDesc[i]);
             url.add(Proxy.getUrl() + "?do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
-
+        SpiderDebug.log("TVBox  playerContent url" + url);
+        SpiderDebug.log("TVBox  playerContent Result:" + Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
-    // 静态本地代理服务回调
+    // 保持你原有的 proxy 本地代理实现，完全不做改变
     public static Object[] proxy(Map<String, String> params) {
-        try {
-            String aid = params.get("aid");
-            String cid = params.get("cid");
-            String qn = params.get("qn");
-            String api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + cid + "&qn=" + qn + "&fnval=4048&fourk=1";
-
-            String json = OkHttp.string(api, getHeader());
-            Resp resp = Resp.objectFrom(json);
-
-            if (resp != null && resp.getData() != null && resp.getData().getDash() != null) {
-                Dash dash = resp.getData().getDash();
-                StringBuilder video = new StringBuilder();
-                StringBuilder audio = new StringBuilder();
-                findAudio(dash, audio);
-                findVideo(dash, video, qn);
-
-                String mpd = getMpd(dash, video.toString(), audio.toString());
-                Object[] result = new Object[3];
-                result[0] = 200;
-                result[1] = "application/dash+xml";
-                result[2] = new ByteArrayInputStream(mpd.getBytes());
-                return result;
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Proxy Error] " + e.getMessage());
-        }
-        return null;
+        String aid = params.get("aid");
+        String cid = params.get("cid");
+        String qn = params.get("qn");
+        String api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + cid + "&qn=" + qn + "&fnval=4048&fourk=1";
+        String json = OkHttp.string(api, getHeader());
+        Resp resp = Resp.objectFrom(json);
+        Dash dash = resp.getData().getDash();
+        StringBuilder video = new StringBuilder();
+        StringBuilder audio = new StringBuilder();
+        findAudio(dash, audio);
+        findVideo(dash, video, qn);
+        String mpd = getMpd(dash, video.toString(), audio.toString());
+        Object[] result = new Object[3];
+        result[0] = 200;
+        result[1] = "application/dash+xml";
+        result[2] = new ByteArrayInputStream(mpd.getBytes());
+        return result;
     }
 
     private static HashMap<String, String> getAudioFormat() {
