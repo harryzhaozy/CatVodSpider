@@ -107,29 +107,90 @@ public class Bili extends Spider {
         return Result.string(list);
     }
 
-    @Override
-    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        if (tid.endsWith("/{pg}")) {
-            LinkedHashMap<String, Object> params = new LinkedHashMap<>();
-            params.put("mid", tid.split("/")[0]);
-            params.put("pn", pg);
-            List<Vod> list = new ArrayList<>();
-            String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
-            for (Resp.Result item : Resp.Result.arrayFrom(Resp.objectFrom(json).getData().getList().getAsJsonObject().get("vlist"))) list.add(item.getVod());
-            return Result.string(list);
-        } else {
-            String order = extend.containsKey("order") ? extend.get("order") : "totalrank";
-            String duration = extend.containsKey("duration") ? extend.get("duration") : "0";
-            if (extend.containsKey("tid")) tid = tid + " " + extend.get("tid");
-            String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" + URLEncoder.encode(tid) + "&order=" + order + "&duration=" + duration + "&page=" + pg;
-            String json = OkHttp.string(api, getHeader());
-            Resp resp = Resp.objectFrom(json);
-            List<Vod> list = new ArrayList<>();
-            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) list.add(item.getVod());
-            return Result.string(list);
-        }
-    }
+    
 
+@Override
+public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+    List<Vod> list = new ArrayList<>();
+
+    // 1. UP主空间作品分支 (WBI)
+    if (tid.endsWith("/{pg}")) {
+        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
+        params.put("mid", tid.split("/")[0]);
+        params.put("pn", pg);
+        
+        String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
+        JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
+        
+        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+            JsonObject data = jsonObject.getAsJsonObject("data");
+            if (data.has("list") && !data.get("list").isJsonNull()) {
+                JsonObject listObj = data.getAsJsonObject("list");
+                if (listObj.has("vlist") && listObj.get("vlist").isJsonArray()) {
+                    JsonArray vlist = listObj.getAsJsonArray("vlist");
+                    for (JsonElement element : vlist) {
+                        Resp.Result item = Resp.Result.objectFrom(element.toString());
+                        if (item != null) {
+                            Vod vod = item.getVod();
+                            cleanVodTitle(vod);
+                            list.add(vod);
+                        }
+                    }
+                }
+            }
+        }
+        return Result.string(list);
+    } 
+    // 2. 综合/分类视频搜索分支
+    else {
+        String order = extend != null && extend.containsKey("order") ? extend.get("order") : "totalrank";
+        String duration = extend != null && extend.containsKey("duration") ? extend.get("duration") : "0";
+        if (extend != null && extend.containsKey("tid")) {
+            tid = tid + " " + extend.get("tid");
+        }
+
+        String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
+                     + URLEncoder.encode(tid, "UTF-8") 
+                     + "&order=" + order 
+                     + "&duration=" + duration 
+                     + "&page=" + pg;
+
+        String json = OkHttp.string(api, getHeader());
+        JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
+
+        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+            JsonObject data = jsonObject.getAsJsonObject("data");
+            if (data.has("result") && data.get("result").isJsonArray()) {
+                JsonArray resultArray = data.getAsJsonArray("result");
+                for (JsonElement element : resultArray) {
+                    JsonObject itemObj = element.getAsJsonObject();
+                    
+                    // 关键修复：B站搜索结果中混杂有 "ketang"（课堂）等非视频对象，需要过滤掉
+                    if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                        Resp.Result item = Resp.Result.objectFrom(itemObj.toString());
+                        if (item != null) {
+                            Vod vod = item.getVod();
+                            cleanVodTitle(vod);
+                            list.add(vod);
+                        }
+                    }
+                }
+            }
+        }
+        return Result.string(list);
+    }
+}
+
+/**
+ * 辅助方法：清理 Vod 标题和简介中的 <em class="keyword"> 等 HTML 标签
+ */
+private void cleanVodTitle(Vod vod) {
+    if (vod == null) return;
+    if (vod.getVod_name() != null) {
+        vod.setVod_name(vod.getVod_name().replaceAll("<[^>]*>", ""));
+    }
+}
+    
     @Override
     public String detailContent(List<String> ids) throws Exception {
         if (!login) checkLogin();
