@@ -120,22 +120,25 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList().getAsJsonObject().get("vlist"))) {
-                if (item != null && item.getVod() != null) {
-                    list.add(item.getVod());
+            com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
+            if (vlist != null && vlist.isJsonArray()) {
+                for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
+                    if (item != null && item.getVod() != null) {
+                        list.add(item.getVod());
+                    }
                 }
             }
         }
         return Result.string(list);
     } else {
-        // 1. 安全处理 extend，防止 Android 6 下 NPE
+       
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 必须显式指定 "UTF-8"，防止 Android 6 URLEncoder 编码偏离
+       
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -145,17 +148,20 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
 
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            // 3. 逐项遍历解析，规避 Android 6 遇到 ketang 等非视频对象时整体抛错
-            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
-                if (item == null) continue;
-                
-                Vod vod = item.getVod();
-                if (vod == null) continue;
-
-                // 核心过滤：B站返回结果中 type 可能为 ketang，ketang 的 id/bvid 均无效，必须过滤掉
-                if (vod.getVodId() == null && vod.getVodPic() == null) continue;
-
-                list.add(vod);
+            com.google.gson.JsonElement resultElement = resp.getData().getResult();
+            if (resultElement != null && resultElement.isJsonArray()) {
+                com.google.gson.JsonArray resultArray = resultElement.getAsJsonArray();
+                for (com.google.gson.JsonElement element : resultArray) {
+                    if (!element.isJsonObject()) continue;
+                    com.google.gson.JsonObject itemObj = element.getAsJsonObject();
+                   
+                    if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                        Resp.Result item = Resp.objectFrom(itemObj.toString(), Resp.Result.class);
+                        if (item != null && item.getVod() != null) {
+                            list.add(item.getVod());
+                        }
+                    }
+                }
             }
         }
         return Result.string(list);
