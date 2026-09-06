@@ -147,63 +147,52 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         String json = OkHttp.string(api, getHeader());
         List<Vod> list = new ArrayList<>();
 
-        // 【验证 1】：打印请求的 API URL 和 原始 JSON 长度
-        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] API: " + api);
-        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] RAW JSON Length: " + (json != null ? json.length() : "NULL"));
-
         if (json != null && !json.trim().isEmpty()) {
+            // 清理 HTML 高亮标签与协议头
             json = json.replaceAll("<[^>]*>", "").replaceAll("\"//", "\"https://");
 
             try {
-                Resp resp = Resp.objectFrom(json);
-                // 【验证 2】：打印 Resp 及 Data 对象是否成功反序列化
-                com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Resp parsed: " + (resp != null) 
-                    + ", Data parsed: " + (resp != null && resp.getData() != null));
+                com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+                    com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+                    if (data.has("result") && data.get("result").isJsonArray()) {
+                        com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
 
-                if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-                    com.google.gson.JsonElement resultElement = resp.getData().getResult();
-                    
-                    // 【验证 3】：打印 result 节点的数据类型
-                    com.google.gson.JsonArray resultArray = null;
-                    if (resultElement.isJsonArray()) {
-                        resultArray = resultElement.getAsJsonArray();
-                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Result is JsonArray, size: " + resultArray.size());
-                    } else if (resultElement.isJsonObject()) {
-                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Result is JsonObject! (Unexpected format)");
-                        if (resultElement.getAsJsonObject().has("result") && resultElement.getAsJsonObject().get("result").isJsonArray()) {
-                            resultArray = resultElement.getAsJsonObject().getAsJsonArray("result");
-                            com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Found nested JsonArray result, size: " + resultArray.size());
-                        }
-                    }
+                        for (com.google.gson.JsonElement element : resultArray) {
+                            if (!element.isJsonObject()) continue;
+                            com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
-                    if (resultArray != null) {
-                        List<Resp.Result> results = Resp.Result.arrayFrom(resultArray);
-                        // 【验证 4】：打印 arrayFrom 解析出的 List 长度
-                        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] arrayFrom parsed count: " + (results != null ? results.size() : "NULL"));
+                            // 过滤只保留视频卡片
+                            if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                                Vod vod = new Vod();
+                                
+                                // 直接手动读取核心字段，给 Vod 属性赋值，避开底层 item.getVod() 崩溃
+                                String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
+                                String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+                                String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
+                                String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
 
-                        if (results != null) {
-                            for (Resp.Result item : results) {
-                                if (item != null && item.getVod() != null) {
-                                    list.add(item.getVod());
+                                if (pic.startsWith("//")) {
+                                    pic = "https:" + pic;
                                 }
+
+                                // 赋值给 CatVod Vod 对象的成员变量
+                                vod.vod_id = bvid;
+                                vod.vod_name = title;
+                                vod.vod_pic = pic;
+                                vod.vod_remarks = durationStr;
+
+                                list.add(vod);
                             }
                         }
                     }
-                } else {
-                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] resp.getData().getResult() is NULL");
                 }
             } catch (Throwable t) {
-                // 【验证 5】：捕获 Android 6 上抛出的隐式崩溃异常
-                com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Exception on Android 6: " + t.getMessage());
-                t.printStackTrace();
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Error] " + t.getMessage());
             }
         }
         
-        // 【验证 6】：打印最终返回给 TVBox 的 Vod 数量以及 JSON 字符串长度
-        String finalResult = Result.string(list);
-        com.github.catvod.crawler.SpiderDebug.log("===[Bili Check] Final Vod count: " + list.size() + ", Final Result JSON length: " + finalResult.length());
-        
-        return finalResult;
+        return Result.string(list);
     }
 }
     
