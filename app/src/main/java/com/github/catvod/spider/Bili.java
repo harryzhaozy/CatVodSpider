@@ -96,16 +96,73 @@ public class Bili extends Spider {
         return Result.string(classes, filters);
     }
 
-    @Override
-    public String homeVideoContent() {
-        String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
-        String json = OkHttp.string(api, getHeader());
-        Resp resp = Resp.objectFrom(json);
-        List<Vod> list = new ArrayList<>();
-        for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList())) list.add(item.getVod());
-        SpiderDebug.log("TVBox homeVideoContent=" + Result.string(list));
-        return Result.string(list);
+@Override
+public String homeVideoContent() {
+    String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
+    String json = OkHttp.string(api, getHeader());
+    List<Vod> list = new ArrayList<>();
+
+    if (json != null && !json.trim().isEmpty()) {
+        try {
+            com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+                com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+                if (data.has("list") && data.get("list").isJsonArray()) {
+                    com.google.gson.JsonArray listArray = data.getAsJsonArray("list");
+                    com.google.gson.Gson gson = new com.google.gson.Gson();
+
+                    for (com.google.gson.JsonElement element : listArray) {
+                        if (!element.isJsonObject()) continue;
+                        com.google.gson.JsonObject itemObj = element.getAsJsonObject();
+
+                        com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
+
+                        // 1. 严格拼接 bvid@aid 确保首页视频点击能正常进入详情页
+                        String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
+                        String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
+                        String vodId = bvid + "@" + aid;
+
+                        // 2. 提取标题
+                        String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+
+                        // 3. 图片路径补全协议头
+                        String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
+                        if (pic.startsWith("//")) {
+                            pic = "https:" + pic;
+                        }
+
+                        // 4. 提取时长（popular 接口的 duration 是秒数整型，转为 mm:ss 显示更美观）
+                        String durationStr = "";
+                        if (itemObj.has("duration")) {
+                            try {
+                                long duration = itemObj.get("duration").getAsLong();
+                                durationStr = String.format("%02d:%02d", duration / 60, duration % 60);
+                            } catch (Exception e) {
+                                durationStr = itemObj.get("duration").getAsString();
+                            }
+                        }
+
+                        // 装配序列化 JSON
+                        vodJson.addProperty("vod_id", vodId);
+                        vodJson.addProperty("vod_name", title);
+                        vodJson.addProperty("vod_pic", pic);
+                        vodJson.addProperty("vod_remarks", durationStr);
+
+                        Vod vod = gson.fromJson(vodJson, Vod.class);
+                        if (vod != null) {
+                            list.add(vod);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            com.github.catvod.crawler.SpiderDebug.log("===[Bili Home Error] " + t.getMessage());
+        }
     }
+
+    SpiderDebug.log("TVBox homeVideoContent=" + Result.string(list));
+    return Result.string(list);
+}
 
 @Override
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
