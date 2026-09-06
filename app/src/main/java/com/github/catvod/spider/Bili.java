@@ -118,51 +118,56 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
         
         String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
-        Resp resp = Resp.objectFrom(json);
-        if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-            com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
-            if (vlist != null && vlist.isJsonArray()) {
-                for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
-                    if (item != null && item.getVod() != null) {
-                        list.add(item.getVod());
+        if (json != null && !json.isEmpty()) {
+            // 通配替换：将所有协议相对路径 "//" 统一补全为 "https://"
+            json = json.replaceAll("\"//", "\"https://");
+            
+            Resp resp = Resp.objectFrom(json);
+            if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
+                com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
+                if (vlist != null && vlist.isJsonArray()) {
+                    for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
+                        if (item != null && item.getVod() != null) {
+                            list.add(item.getVod());
+                        }
                     }
                 }
             }
         }
         return Result.string(list);
     } else {
+        // 1. 安全判空 extend，防止 Android 6 NPE 崩溃
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 兼容 Android 6 的 UTF-8 编码处理
+        // 2. 显式 UTF-8 编码，解决 Android 6 URLEncoder 字符集兼容问题
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
 
         String json = OkHttp.string(api, getHeader());
-        
-        // 关键防护：如果 B站 标题带 <em class="keyword"> 标签，提前通过正则把 HTML 标签全部抹平！
-        // 这能彻底防止 Android 6 的低版本 Gson/JsonParser 因为标签反斜杠转义解析失败，同时保证 Android 9 正常显示
-        if (json != null) {
-            json = json.replaceAll("<[^>]*>", "");
-        }
-
-        Resp resp = Resp.objectFrom(json);
         List<Vod> list = new ArrayList<>();
 
-        if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            com.google.gson.JsonElement resultElement = resp.getData().getResult();
+        if (json != null && !json.trim().isEmpty()) {
+            // 3. 通配清洗 1：移除 B站 搜索高亮标签 <em class="...">
+            json = json.replaceAll("<[^>]*>", "");
             
-            // 安全判定：只有当 result 确实是 JsonArray 时才使用 arrayFrom
-            if (resultElement.isJsonArray()) {
-                List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
-                if (results != null) {
-                    for (Resp.Result item : results) {
-                        if (item != null && item.getVod() != null) {
-                            list.add(item.getVod());
+            // 4. 通配清洗 2：通配匹配替换所有无协议头的 URL（"//hdslb.com..." -> "https://hdslb.com..."）
+            json = json.replaceAll("\"//", "\"https://");
+
+            Resp resp = Resp.objectFrom(json);
+            if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
+                com.google.gson.JsonElement resultElement = resp.getData().getResult();
+                if (resultElement.isJsonArray()) {
+                    List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
+                    if (results != null) {
+                        for (Resp.Result item : results) {
+                            if (item != null && item.getVod() != null) {
+                                list.add(item.getVod());
+                            }
                         }
                     }
                 }
