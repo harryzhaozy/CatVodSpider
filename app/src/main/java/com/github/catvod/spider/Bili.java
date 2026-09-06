@@ -107,6 +107,8 @@ public class Bili extends Spider {
         return Result.string(list);
     }
 
+
+
 @Override
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
     if (tid.endsWith("/{pg}")) {
@@ -136,7 +138,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 显式 UTF-8 编码，解决 Android 6 下 URLEncoder 的编码差异
+        // 2. 显式 UTF-8 编码，解决 Android 6 下 URLEncoder 的字符集兼容问题
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -146,17 +148,15 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
 
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            // 逐个节点判断 type，规避 Android 6 对异构数组解析崩溃问题
             com.google.gson.JsonArray resultArray = resp.getData().getResult().getAsJsonArray();
             for (com.google.gson.JsonElement element : resultArray) {
                 if (!element.isJsonObject()) continue;
                 com.google.gson.JsonObject itemObj = element.getAsJsonObject();
                 
-                // 仅保留视频项（过滤 ketang 课堂卡片等）
+                // 仅保留视频项（过滤 ketang 课堂卡片等，解决 Android 6 解析崩溃问题）
                 if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                    // 将单个 JsonObject 包装为 JsonArray 字符串 "[ {...} ]"
-                    // 借用项目中 100% 存在的 Resp.Result.arrayFrom 进行安全单条解析
-                    List<Resp.Result> singleList = Resp.Result.arrayFrom("[" + itemObj.toString() + "]");
+                    // itemObj 本身就是 JsonElement，直接传给 arrayFrom(JsonElement)
+                    List<Resp.Result> singleList = Resp.Result.arrayFrom(itemObj);
                     if (singleList != null && !singleList.isEmpty()) {
                         Resp.Result item = singleList.get(0);
                         if (item != null && item.getVod() != null) {
@@ -169,8 +169,6 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         return Result.string(list);
     }
 }
-
-
     
     @Override
     public String detailContent(List<String> ids) throws Exception {
