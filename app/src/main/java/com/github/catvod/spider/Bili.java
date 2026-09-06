@@ -118,21 +118,25 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList().getAsJsonObject().get("vlist"))) {
-                if (item != null && item.getVod() != null) {
-                    list.add(item.getVod());
+            com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
+            if (vlist != null) {
+                for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
+                    if (item != null && item.getVod() != null) {
+                        list.add(item.getVod());
+                    }
                 }
             }
         }
         return Result.string(list);
     } else {
+        // 1. 安全处理 extend
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 显式指定 UTF-8，解决 Android 6 上 URLEncoder 的字符集兼容问题
+        // 2. 显式 UTF-8 编码，解决 Android 6 下 URLEncoder 的编码差异
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
@@ -142,16 +146,22 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
 
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            // 在 Android 6 上，将 result 数组转为 JsonArray 逐项解析，避免单个 ketang 课程节点卡死全局
-            for (com.google.gson.JsonElement element : resp.getData().getResult().getAsJsonArray()) {
+            // 逐个节点判断 type，规避 Android 6 对异构数组解析崩溃问题
+            com.google.gson.JsonArray resultArray = resp.getData().getResult().getAsJsonArray();
+            for (com.google.gson.JsonElement element : resultArray) {
                 if (!element.isJsonObject()) continue;
                 com.google.gson.JsonObject itemObj = element.getAsJsonObject();
                 
-                // 仅当 type 为 video 时才进行反序列化
+                // 仅保留视频项（过滤 ketang 课堂卡片等）
                 if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                    Resp.Result item = Resp.Result.objectFrom(itemObj.toString());
-                    if (item != null && item.getVod() != null) {
-                        list.add(item.getVod());
+                    // 将单个 JsonObject 包装为 JsonArray 字符串 "[ {...} ]"
+                    // 借用项目中 100% 存在的 Resp.Result.arrayFrom 进行安全单条解析
+                    List<Resp.Result> singleList = Resp.Result.arrayFrom("[" + itemObj.toString() + "]");
+                    if (singleList != null && !singleList.isEmpty()) {
+                        Resp.Result item = singleList.get(0);
+                        if (item != null && item.getVod() != null) {
+                            list.add(item.getVod());
+                        }
                     }
                 }
             }
