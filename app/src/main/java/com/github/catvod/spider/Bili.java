@@ -121,7 +121,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         Resp resp = Resp.objectFrom(json);
         if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
             com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
-            if (vlist != null) {
+            if (vlist != null && vlist.isJsonArray()) {
                 for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
                     if (item != null && item.getVod() != null) {
                         list.add(item.getVod());
@@ -131,34 +131,36 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
         return Result.string(list);
     } else {
-        // 1. 安全处理 extend
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
         String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
         if (extend != null && extend.containsKey("tid")) {
             tid = tid + " " + extend.get("tid");
         }
 
-        // 2. 显式 UTF-8 编码，解决 Android 6 下 URLEncoder 的字符集兼容问题
+        // 兼容 Android 6 的 UTF-8 编码处理
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
 
         String json = OkHttp.string(api, getHeader());
-        List<Vod> list = new ArrayList<>();
+        
+        // 关键防护：如果 B站 标题带 <em class="keyword"> 标签，提前通过正则把 HTML 标签全部抹平！
+        // 这能彻底防止 Android 6 的低版本 Gson/JsonParser 因为标签反斜杠转义解析失败，同时保证 Android 9 正常显示
+        if (json != null) {
+            json = json.replaceAll("<[^>]*>", "");
+        }
 
         Resp resp = Resp.objectFrom(json);
+        List<Vod> list = new ArrayList<>();
+
         if (resp != null && resp.getData() != null && resp.getData().getResult() != null) {
-            com.google.gson.JsonArray resultArray = resp.getData().getResult().getAsJsonArray();
-            for (com.google.gson.JsonElement element : resultArray) {
-                if (!element.isJsonObject()) continue;
-                com.google.gson.JsonObject itemObj = element.getAsJsonObject();
-                
-                // 仅保留视频项（过滤 ketang 课堂卡片等，解决 Android 6 解析崩溃问题）
-                if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                    // itemObj 本身就是 JsonElement，直接传给 arrayFrom(JsonElement)
-                    List<Resp.Result> singleList = Resp.Result.arrayFrom(itemObj);
-                    if (singleList != null && !singleList.isEmpty()) {
-                        Resp.Result item = singleList.get(0);
+            com.google.gson.JsonElement resultElement = resp.getData().getResult();
+            
+            // 安全判定：只有当 result 确实是 JsonArray 时才使用 arrayFrom
+            if (resultElement.isJsonArray()) {
+                List<Resp.Result> results = Resp.Result.arrayFrom(resultElement);
+                if (results != null) {
+                    for (Resp.Result item : results) {
                         if (item != null && item.getVod() != null) {
                             list.add(item.getVod());
                         }
