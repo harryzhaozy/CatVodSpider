@@ -15,8 +15,8 @@ public class Proxy extends Spider {
         switch (params.get("do")) {
             case "ck":
                 return new Object[]{200, "text/plain; charset=utf-8", new ByteArrayInputStream("ok".getBytes("UTF-8"))};
-            case "bili":
-                return Bili.proxy(params);
+            //case "bili":
+            //    return Bili.proxy(params);
             case "webdav":
                 return WebDAV.vod(params);
             case "local":
