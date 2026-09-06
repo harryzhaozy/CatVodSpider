@@ -107,9 +107,7 @@ public class Bili extends Spider {
         return Result.string(list);
     }
 
-
-
-    @Override
+@Override
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
     if (tid.endsWith("/{pg}")) {
         LinkedHashMap<String, Object> params = new LinkedHashMap<>();
@@ -148,7 +146,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         List<Vod> list = new ArrayList<>();
 
         if (json != null && !json.trim().isEmpty()) {
-            // 清理 HTML 标签与协议头
+            // 文本清洗：去高亮标签、补全图片 https 协议
             json = json.replaceAll("<[^>]*>", "").replaceAll("\"//", "\"https://");
 
             try {
@@ -158,13 +156,18 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
                     if (data.has("result") && data.get("result").isJsonArray()) {
                         com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
 
+                        // 实例化一个全局 Gson，专门用于安全的模型反序列化
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+
                         for (com.google.gson.JsonElement element : resultArray) {
                             if (!element.isJsonObject()) continue;
                             com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
                             // 过滤只保留视频卡片
                             if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                                Vod vod = new Vod();
+                                
+                                // 构造符合 Vod 类 SerializedName 的标准 JsonObject
+                                com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
                                 
                                 String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                                 String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
@@ -175,13 +178,16 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
                                     pic = "https:" + pic;
                                 }
 
-                                // 修正为驼峰命名的成员变量（完全避开导致 com.github.catvod.spider.merge.I0.o 崩溃的 item.getVod()）
-                                vod.vodId = bvid;
-                                vod.vodName = title;
-                                vod.vodPic = pic;
-                                vod.vodRemarks = durationStr;
+                                vodJson.addProperty("vod_id", bvid);
+                                vodJson.addProperty("vod_name", title);
+                                vodJson.addProperty("vod_pic", pic);
+                                vodJson.addProperty("vod_remarks", durationStr);
 
-                                list.add(vod);
+                                // 直接使用 Gson 映射为 Vod 对象，无需调用任何字段或 Setter 方法！
+                                Vod vod = gson.fromJson(vodJson, Vod.class);
+                                if (vod != null) {
+                                    list.add(vod);
+                                }
                             }
                         }
                     }
@@ -194,6 +200,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         return Result.string(list);
     }
 }
+
     
     @Override
     public String detailContent(List<String> ids) throws Exception {
