@@ -51,6 +51,7 @@ public class Bili extends Spider {
     private static Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", Util.CHROME);
+        headers.put("origin", "https://www.bilibili.com");
         headers.put("Referer", "https://www.bilibili.com");
         if (cookie != null) headers.put("cookie", cookie);
         return headers;
