@@ -442,18 +442,8 @@ public class Bili extends Spider {
                     login = data.isLogin();
                     isVip = data.isVip();
                     wbi = data.getWbi();
-
-                    final String tipMessage;
                     if (login) {
-                        tipMessage = "B站已登录: " + data.getName() + (isVip ? " (大会员)" : "");
-                    } else {
-                        tipMessage = "B站未登录/Cookie失效，当前以游客身份访问";
-                    }
-
-                    SpiderDebug.log("===[Bili Login status] " + tipMessage);
-
-                    if (mContext != null) {
-                        Init.run(() -> Toast.makeText(mContext, tipMessage, Toast.LENGTH_SHORT).show());
+                        SpiderDebug.log("===[Bili Status] 已登录成功");
                     }
                     return;
                 }
