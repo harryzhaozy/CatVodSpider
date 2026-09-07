@@ -583,7 +583,7 @@ private void stopPolling() {
             //Vod vod = new Vod();
             //vod.setVodId("login_setting");
             //vod.setVodName("Click to Configure / 点击配置账号");
-            //vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            //vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
             //vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
             //list.add(vod);
             //return Result.string(list);
@@ -598,7 +598,7 @@ private void stopPolling() {
             org.json.JSONObject vodObj = new org.json.JSONObject();
             vodObj.put("vod_id", "login_setting");
             vodObj.put("vod_name", "【点击配置 Bilibili 账号】");
-            vodObj.put("vod_pic", "https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
             vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录 / 点击登录");
             array.put(vodObj);
 
