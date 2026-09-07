@@ -116,8 +116,7 @@ public class Bili extends Spider {
     public void init(Context context, String extend) throws Exception {
         this.mContext = context;
         this.extend = Json.safeObject(extend);
-        setCookie();
-        checkLogin();
+        
         try {
             if (java.net.CookieHandler.getDefault() == null) {
                 java.net.CookieHandler.setDefault(new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL));
@@ -126,6 +125,8 @@ public class Bili extends Spider {
         } catch (Exception e) {
             SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
+        setCookie();
+        checkLogin();
     }
 
     private void checkLogin() {
