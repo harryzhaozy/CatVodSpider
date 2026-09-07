@@ -445,7 +445,7 @@ public class Bili extends Spider {
 
                     final String tipMessage;
                     if (login) {
-                        tipMessage = "B站已登录: " + data.getUname() + (isVip ? " (大会员)" : "");
+                        tipMessage = "B站已登录: " + data.getName() + (isVip ? " (大会员)" : "");
                     } else {
                         tipMessage = "B站未登录/Cookie失效，当前以游客身份访问";
                     }
