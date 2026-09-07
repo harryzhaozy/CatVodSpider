@@ -130,30 +130,48 @@ public class Bili extends Spider {
     }
 
     private void checkLogin() {
-        try {
-            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
-            if (json != null && !json.isEmpty()) {
-                Resp resp = Resp.objectFrom(json);
-                if (resp != null && resp.getData() != null) {
-                    Data data = resp.getData();
-                    login = data.isLogin();
-                    isVip = data.isVip();
-                    wbi = data.getWbi();
-                    if (login) {
-                        SpiderDebug.log("===[Bili Status] B站已登录");
-                    } else {
-                        SpiderDebug.log("===[Bili Status] 未登录或 Cookie 已失效");
-                    }
-                    return;
-                }
+    try {
+        String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
+        
+        // 1. 安全过滤：返回为空，或者包含 412/HTML 拦截页时，跳过解析，保留原有本地 Cookie 登录态
+        if (json == null || json.isEmpty() || json.contains("412") || json.contains("JavaScript") || !json.trim().startsWith("{")) {
+            SpiderDebug.log("===[Bili Status] 接口返回非 JSON 数据(可能风控拦截)，保留本地登录态: " + json);
+            // 本地如果含有 SESSDATA，默认保留登录状态，防止被风控误杀
+            if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
+                this.login = true;
             }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Check Login Exception] " + e.getMessage());
+            return;
         }
-        login = false;
-        isVip = false;
+
+        // 2. 正常 JSON 解析
+        Resp resp = Resp.objectFrom(json);
+        if (resp != null && resp.getData() != null) {
+            Data data = resp.getData();
+            login = data.isLogin();
+            isVip = data.isVip();
+            wbi = data.getWbi();
+            if (login) {
+                SpiderDebug.log("===[Bili Status] B站已登录");
+            } else {
+                SpiderDebug.log("===[Bili Status] 未登录或 Cookie 已失效");
+            }
+            return;
+        }
+    } catch (Exception e) {
+        SpiderDebug.log("===[Bili Check Login Exception] " + e.getMessage());
     }
 
+    // 3. 只有当确定本地根本没有 SESSDATA 凭证时，才重置为未登录
+    if (TextUtils.isEmpty(this.cookie) || !this.cookie.contains("SESSDATA")) {
+        login = false;
+        isVip = false;
+    } else {
+        // 本地有 SESSDATA 但解析偶尔失败时，兜底维持登录，防止掉线
+        login = true;
+    }
+}
+
+    
     // ====================== 登录配置与扫码界面控制 ======================
 
    private void showPeizhiDialog() {
@@ -347,9 +365,10 @@ public class Bili extends Spider {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                conn.setRequestProperty("User-Agent", Util.CHROME);
                 conn.setRequestProperty("Referer", "https://www.bilibili.com/");
-                
+                conn.setRequestProperty("origin", "https://www.bilibili.com");
+                if (cookie != null) conn.setRequestProperty("cookie", cookie);
                 // 3. 读取响应体
                 java.io.InputStream in = conn.getInputStream();
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
