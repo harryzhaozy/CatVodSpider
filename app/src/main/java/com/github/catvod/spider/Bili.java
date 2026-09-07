@@ -576,8 +576,23 @@ private void stopPolling() {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
         if ("peizhi".equals(tid)) {
-            Init.run(this::showPeizhiDialog);
-            return Result.string(new ArrayList<>());
+            //Init.run(this::showPeizhiDialog);
+            Result result = new Result();
+            List<Vod> list = new ArrayList<>();
+            // 构建一个占位卡片提示用户（可选，防止部分 TV 壳子展示空白页报错）
+            Vod vod = new Vod();
+            vod.setVodId("login_setting");
+            vod.setVodName("Click to Configure / 点击配置账号");
+            vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
+            list.add(vod);
+
+            result.setList(list);
+            result.setPage(1);
+            result.setPagecount(1);
+            result.setLimit(1);
+            result.setTotal(1);
+            return result.toString();
         }
 
         // 2. 如果是 UP 主空间视频
@@ -682,6 +697,34 @@ private void stopPolling() {
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
+        @Override
+public String detailContent(List<String> ids) {
+    try {
+        // 1. 拦截占位卡片的点击事件
+        if (ids != null && !ids.isEmpty() && "login_setting".equals(ids.get(0))) {
+            SpiderDebug.log("===[Bili Detail] 用户点击了登录配置卡片，准备弹出配置窗口");
+            
+            // 在主线程触发配置弹窗
+            Init.run(this::showPeizhiDialog);
+
+            // 构建并返回一个空的 Detail Result，防止 TV 壳子因数据为空抛出 NPE 或继续发 API 请求
+            Result result = new Result();
+            List<Vod> list = new ArrayList<>();
+            
+            Vod vod = new Vod();
+            vod.setVodId("login_setting");
+            vod.setVodName("Bilibili 账号配置");
+            vod.setVodPlayFrom("配置交互");
+            vod.setVodPlayUrl("点击界面选项进行操作$blank");
+            list.add(vod);
+
+            result.setList(list);
+            return result.toString();
+        }
+    } catch (Exception e) {
+        SpiderDebug.log("===[Bili Detail Error] " + e.getMessage());
+    }
+        //正常处理
         if (!login) checkLogin();
 
         String[] split = ids.get(0).split("@");
