@@ -52,6 +52,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+
 /**
  * @author ColaMint & FongMi & 唐三
  */
@@ -288,7 +289,7 @@ public class Bili extends Spider {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 使用 CatVod 框架原生 OkHttp
+            // 轮询接口继续使用 CatVod 原生的 OkHttp.string
             String json = OkHttp.string(pollApi, getHeader());
             if (TextUtils.isEmpty(json)) return;
 
@@ -303,25 +304,49 @@ public class Bili extends Spider {
                 
                 StringBuilder cookieBuilder = new StringBuilder();
 
-                // 1. 请求跨域地址并抓取返回的 Set-Cookie
+                // 1. 使用 Java 标准 HttpURLConnection 访问 crossDomain 地址提取 Set-Cookie
+                // 零第三方库依赖，100% 兼容 Android TV 6 及全版本
                 if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
                     String redirectUrl = data.get("url").getAsString();
                     
-                    // 创建 Map 接收 Response Header
-                    Map<String, List<String>> responseHeaders = new java.util.HashMap<>();
-                    
-                    // 使用 CatVod OkHttp 带有 responseHeaders 参数的重载方法
-                    OkHttp.string(redirectUrl, getHeader(), responseHeaders);
+                    java.net.HttpURLConnection conn = null;
+                    try {
+                        java.net.URL url = new java.net.URL(redirectUrl);
+                        conn = (java.net.HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("GET");
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(10000);
+                        conn.setInstanceFollowRedirects(false); // 禁止自动跳转，直接读取本页面的 Set-Cookie
 
-                    // 提取 Set-Cookie
-                    for (Map.Entry<String, List<String>> entry : responseHeaders.entrySet()) {
-                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
-                            for (String ck : entry.getValue()) {
-                                if (!TextUtils.isEmpty(ck)) {
-                                    String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
-                                    cookieBuilder.append(kv).append("; ");
+                        // 注入通用 Header
+                        Map<String, String> headers = getHeader();
+                        if (headers != null) {
+                            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                                conn.setRequestProperty(entry.getKey(), entry.getValue());
+                            }
+                        }
+
+                        conn.connect();
+
+                        // 提取 Set-Cookie
+                        Map<String, List<String>> headerFields = conn.getHeaderFields();
+                        if (headerFields != null) {
+                            for (Map.Entry<String, List<String>> entry : headerFields.entrySet()) {
+                                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
+                                    for (String ck : entry.getValue()) {
+                                        if (!TextUtils.isEmpty(ck)) {
+                                            String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
+                                            cookieBuilder.append(kv).append("; ");
+                                        }
+                                    }
                                 }
                             }
+                        }
+                    } catch (Exception e) {
+                        SpiderDebug.log("===[Bili CrossDomain Fetch Cookie Error] " + e.getMessage());
+                    } finally {
+                        if (conn != null) {
+                            conn.disconnect();
                         }
                     }
                 }
