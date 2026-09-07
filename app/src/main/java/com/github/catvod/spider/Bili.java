@@ -105,15 +105,13 @@ public class Bili extends Spider {
         this.extend = Json.safeObject(extend);
         setCookie();
         checkLogin();
-        static {
-            try {
-                if (java.net.CookieHandler.getDefault() == null) {
-                    java.net.CookieHandler.setDefault(new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL));
-                    SpiderDebug.log("===[Bili Init] 全局 CookieManager 注册成功");
-                }
-            } catch (Exception e) {
-                SpiderDebug.log("===[Bili Init Error] CookieManager 注册失败: " + e.getMessage());
+        try {
+            if (java.net.CookieHandler.getDefault() == null) {
+                java.net.CookieHandler.setDefault(new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL));
+                SpiderDebug.log("===[Bili Init] 全局 CookieManager 注册成功");
             }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
     }
 
@@ -301,10 +299,10 @@ public class Bili extends Spider {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 每次轮询前，清空一次旧域名的临时 Cookie 存储，确保拿到的是最新下发的凭证
+            // 确保 CookieManager 随时就绪
             java.net.CookieManager cm = (java.net.CookieManager) java.net.CookieHandler.getDefault();
             
-            // 发起单次 poll 请求（底层会自动将 Set-Cookie 写入 CookieManager）
+            // 发起单次 poll 请求（底层的 HttpURLConnection / OkHttp 会将 Set-Cookie 自动存入全局 CookieManager）
             String json = OkHttp.string(pollApi, getHeader());
             
             if (TextUtils.isEmpty(json)) return;
