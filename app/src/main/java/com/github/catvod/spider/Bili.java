@@ -289,8 +289,11 @@ public class Bili extends Spider {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 1. 轮询接口
-            String json = OkHttp.string(pollApi, getHeader());
+            // 用来接收轮询接口响应头的 Map
+            Map<String, String> responseHeaders = new HashMap<>();
+
+            // 1. 请求轮询接口，同时传入 responseHeaders 接收 Set-Cookie
+            String json = OkHttp.string(pollApi, getHeader(), responseHeaders);
             if (TextUtils.isEmpty(json)) return;
 
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
@@ -304,43 +307,31 @@ public class Bili extends Spider {
                 
                 StringBuilder cookieBuilder = new StringBuilder();
 
-                // 2. 访问 crossDomain 跳转地址，并用 Map 接收 Response Header 中的 Set-Cookie
-                if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
-                    String redirectUrl = data.get("url").getAsString();
-                    
-                    // 定义一个 Map 用于接收接口返回的 Header
-                    Map<String, String> responseHeaders = new HashMap<>();
-                    
-                    // 使用 CatVod 框架封装的 OkHttp 请求（已内置 SSL 证书与 TLS 兼容）
-                    OkHttp.string(redirectUrl, getHeader(), responseHeaders);
-
-                    // 从返回的 Header 中寻找 set-cookie / Set-Cookie
-                    for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
-                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("set-cookie")) {
-                            String cookieValue = entry.getValue();
-                            if (!TextUtils.isEmpty(cookieValue)) {
-                                // 处理可能包含多个 Cookie 的情况
-                                String[] cookies = cookieValue.split("\n");
-                                for (String ck : cookies) {
-                                    String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等核心凭证
-                                    cookieBuilder.append(kv).append("; ");
-                                }
+                // 2. 直接从轮询接口的响应头中提取 Set-Cookie
+                for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
+                    if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("set-cookie")) {
+                        String cookieValue = entry.getValue();
+                        if (!TextUtils.isEmpty(cookieValue)) {
+                            // 支持提取多条 Set-Cookie（如 SESSDATA, bili_jct, DedeUserID）
+                            String[] cookies = cookieValue.split("\n");
+                            for (String ck : cookies) {
+                                String kv = ck.split(";")[0].trim();
+                                cookieBuilder.append(kv).append("; ");
                             }
                         }
                     }
                 }
 
-                // 3. 保存新提取到的 Cookie
+                // 3. 保存新 Cookie 并刷新登录状态
                 if (cookieBuilder.length() > 0) {
                     cookie = cookieBuilder.toString().trim();
                     Path.write(getCache(), cookie);
-                    SpiderDebug.log("===[Bili Login Success] Cookie Saved: " + cookie);
+                    SpiderDebug.log("===[Bili Login Success] Cookie Saved directly from poll response: " + cookie);
                 }
 
-                // 重新校验登录状态
                 checkLogin();
 
-                // 4. 切换到主线程关闭弹窗
+                // 4. 主线程关闭二维码弹窗
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
