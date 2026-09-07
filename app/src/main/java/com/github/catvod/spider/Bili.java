@@ -281,79 +281,95 @@ public class Bili extends Spider {
         }
     }
 
-    private void startPolling(String qrcodeKey) {
-        stopPolling();
-        pollScheduler = Executors.newSingleThreadScheduledExecutor();
-        pollScheduler.scheduleAtFixedRate(() -> {
-            try {
-                String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
+   private void startPolling(String qrcodeKey) {
+    stopPolling();
+    pollScheduler = Executors.newSingleThreadScheduledExecutor();
+    pollScheduler.scheduleAtFixedRate(() -> {
+        try {
+            String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
+            
+            String json = OkHttp.string(pollApi, getHeader());
+            if (TextUtils.isEmpty(json)) return;
+
+            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+            if (!obj.has("data")) return;
+
+            JsonObject data = obj.getAsJsonObject("data");
+            int code = data.get("code").getAsInt();
+
+            if (code == 0) { // 登录成功
+                stopPolling();
                 
-                // 完全改用 OkHttp.string()
-                String json = OkHttp.string(pollApi, getHeader());
-                if (TextUtils.isEmpty(json)) return;
+                StringBuilder cookieBuilder = new StringBuilder();
 
-                JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
-                if (!obj.has("data")) return;
-
-                JsonObject data = obj.getAsJsonObject("data");
-                int code = data.get("code").getAsInt();
-
-                if (code == 0) { // 登录成功
-                    stopPolling();
+                // 1. 访问跨域跳转 URL 并直接从 Response Header 提取 Set-Cookie
+                if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
+                    String redirectUrl = data.get("url").getAsString();
                     
-                    // 1. 如果返回体 data 里包含 url (通常带有 refresh_token 或 SESSDATA 凭证)
-                    if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
-                        String redirectUrl = data.get("url").getAsString();
-                        // 访问一次跳转 URL 以便获取最终的完整 Cookie
-                        OkHttp.string(redirectUrl, getHeader());
-                    }
-
-                    // 2. 从系统默认 CookieManager 获取刚才请求写入的 Cookie
-                    java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
-                    if (cookieManager != null) {
-                        List<java.net.HttpCookie> cookies = cookieManager.getCookieStore().get(java.net.URI.create("https://bilibili.com"));
-                        StringBuilder sb = new StringBuilder();
-                        for (java.net.HttpCookie ck : cookies) {
-                            sb.append(ck.getName()).append("=").append(ck.getValue()).append("; ");
-                        }
-                        if (sb.length() > 0) {
-                            cookie = sb.toString().trim();
-                            Path.write(getCache(), cookie);
-                        }
-                    }
-
-                    // 重新校验登录状态
-                    checkLogin();
-
-                    if (mContext instanceof Activity) {
-                        ((Activity) mContext).runOnUiThread(() -> {
-                            if (qrDialog != null && qrDialog.isShowing()) {
-                                qrDialog.dismiss();
+                    // 改用 OKResponse 获取带有 Set-Cookie 响应头的完整 Response
+                    OKCallBack.OKResponse response = OkHttp.get(redirectUrl, getHeader());
+                    if (response != null && response.getHeaders() != null) {
+                        List<String> setCookies = response.getHeaders().get("Set-Cookie");
+                        if (setCookies == null) setCookies = response.getHeaders().get("set-cookie"); // 兼容小写
+                        
+                        if (setCookies != null) {
+                            for (String ck : setCookies) {
+                                if (!TextUtils.isEmpty(ck)) {
+                                    String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
+                                    cookieBuilder.append(kv).append("; ");
+                                }
                             }
-                            Toast.makeText(mContext, "B站扫码登录成功！Cookie 已保存", Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                } else if (code == 86038) { // 二维码失效
-                    stopPolling();
-                    if (mContext instanceof Activity) {
-                        ((Activity) mContext).runOnUiThread(() -> {
-                            if (qrDialog != null && qrDialog.isShowing()) qrDialog.dismiss();
-                            Toast.makeText(mContext, "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
-                        });
+                        }
                     }
                 }
-            } catch (Exception e) {
-                SpiderDebug.log("===[Bili Poll Exception] " + e.getMessage());
-            }
-        }, 0, 2, TimeUnit.SECONDS);
-    }
 
-    private void stopPolling() {
-        if (pollScheduler != null && !pollScheduler.isShutdown()) {
-            pollScheduler.shutdownNow();
-            pollScheduler = null;
+                // 2. 如果成功提取到 Cookie，保存到本地文件/缓存
+                if (cookieBuilder.length() > 0) {
+                    cookie = cookieBuilder.toString().trim();
+                    Path.write(getCache(), cookie);
+                    SpiderDebug.log("===[Bili Login Success] Cookie Saved: " + cookie);
+                }
+
+                // 重新校验登录状态
+                checkLogin();
+
+                // 3. 安全无视 Context 类型的 UI 线程调度，强制关闭界面
+                Init.runOnUI(() -> {
+                    try {
+                        if (qrDialog != null && qrDialog.isShowing()) {
+                            qrDialog.dismiss();
+                        }
+                        Toast.makeText(mContext != null ? mContext : Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
+                    }
+                });
+
+            } else if (code == 86038) { // 二维码失效
+                stopPolling();
+                Init.runOnUI(() -> {
+                    try {
+                        if (qrDialog != null && qrDialog.isShowing()) {
+                            qrDialog.dismiss();
+                        }
+                        Toast.makeText(mContext != null ? mContext : Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
+                    }
+                });
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Poll Exception] " + e.getMessage());
         }
+    }, 0, 2, TimeUnit.SECONDS);
+}
+
+private void stopPolling() {
+    if (pollScheduler != null && !pollScheduler.isShutdown()) {
+        pollScheduler.shutdownNow();
+        pollScheduler = null;
     }
+}
 
     // ====================== 分类与业务逻辑 ======================
 
