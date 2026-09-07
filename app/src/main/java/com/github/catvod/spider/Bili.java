@@ -284,82 +284,105 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
+    SpiderDebug.log("===[Bili Poll] 开始发起二维码轮询，qrcodeKey: " + qrcodeKey);
     pollScheduler = Executors.newSingleThreadScheduledExecutor();
     pollScheduler.scheduleAtFixedRate(() -> {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 用来接收轮询接口响应头的 Map
+            // 用于接收轮询接口 Response Header 的 Map
             Map<String, String> responseHeaders = new HashMap<>();
-
-            // 1. 请求轮询接口，同时传入 responseHeaders 接收 Set-Cookie
             String json = OkHttp.string(pollApi, getHeader(), responseHeaders);
-            if (TextUtils.isEmpty(json)) return;
+            
+            if (TextUtils.isEmpty(json)) {
+                SpiderDebug.log("===[Bili Poll] 轮询响应体为空，等待下一次轮询...");
+                return;
+            }
 
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
             if (!obj.has("data")) return;
 
             JsonObject data = obj.getAsJsonObject("data");
             int code = data.get("code").getAsInt();
+            String message = data.has("message") ? data.get("message").getAsString() : "";
+
+            // 打印轮询状态日志
+            SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
 
             if (code == 0) { // 扫码登录成功
+                SpiderDebug.log("===[Bili Poll] 监测到扫码成功！准备停止轮询并提取 Cookie...");
                 stopPolling();
                 
                 StringBuilder cookieBuilder = new StringBuilder();
 
-                // 2. 直接从轮询接口的响应头中提取 Set-Cookie
+                // 1. 一步到位：直接从轮询成功时的 Response Header 中提取 Set-Cookie
                 for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
                     if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("set-cookie")) {
                         String cookieValue = entry.getValue();
+                        SpiderDebug.log("===[Bili Poll] 捕获到 Set-Cookie 原始数据: " + cookieValue);
                         if (!TextUtils.isEmpty(cookieValue)) {
-                            // 支持提取多条 Set-Cookie（如 SESSDATA, bili_jct, DedeUserID）
+                            // 兼容可能包含多条 Cookie 换行分割的情况
                             String[] cookies = cookieValue.split("\n");
                             for (String ck : cookies) {
-                                String kv = ck.split(";")[0].trim();
+                                String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等核心凭证
                                 cookieBuilder.append(kv).append("; ");
                             }
                         }
                     }
                 }
 
-                // 3. 保存新 Cookie 并刷新登录状态
+                // 2. 保存完整 Cookie 并更新缓存
                 if (cookieBuilder.length() > 0) {
                     cookie = cookieBuilder.toString().trim();
                     Path.write(getCache(), cookie);
-                    SpiderDebug.log("===[Bili Login Success] Cookie Saved directly from poll response: " + cookie);
+                    SpiderDebug.log("===[Bili Poll Success] Cookie 提取并持久化保存成功: " + cookie);
+                } else {
+                    SpiderDebug.log("===[Bili Poll Warning] 登录成功但未在 Response Header 中找到 Set-Cookie！");
                 }
 
+                // 3. 重新校验登录状态
                 checkLogin();
 
-                // 4. 主线程关闭二维码弹窗
+                // 4. 跨线程安全关闭二维码弹窗
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
                             qrDialog.dismiss();
+                            SpiderDebug.log("===[Bili Poll UI] 二维码 Dialog 弹窗已成功 Dismiss");
                         }
                         Toast.makeText(Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
-                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
+                        SpiderDebug.log("===[Bili Poll UI Error] 关闭 Dialog 异常: " + e.getMessage());
                     }
                 });
 
             } else if (code == 86038) { // 二维码失效
+                SpiderDebug.log("===[Bili Poll] 二维码已失效 (code: 86038)，停止轮询");
                 stopPolling();
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
                             qrDialog.dismiss();
+                            SpiderDebug.log("===[Bili Poll UI] 失效二维码 Dialog 已关闭");
                         }
                         Toast.makeText(Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
-                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
+                        SpiderDebug.log("===[Bili Poll UI Error] 关闭 Dialog 异常: " + e.getMessage());
                     }
                 });
             }
         } catch (Exception e) {
-            SpiderDebug.log("===[Bili Poll Exception] " + e.getMessage());
+            SpiderDebug.log("===[Bili Poll Exception] 轮询过程抛出异常: " + e.getMessage());
         }
     }, 0, 2, TimeUnit.SECONDS);
+}
+
+private void stopPolling() {
+    if (pollScheduler != null && !pollScheduler.isShutdown()) {
+        pollScheduler.shutdownNow();
+        pollScheduler = null;
+        SpiderDebug.log("===[Bili Poll] 轮询线程池已停止");
+    }
 }
 
 private void stopPolling() {
