@@ -294,6 +294,11 @@ public class Bili extends Spider {
             Map<String, String> responseHeaders = new HashMap<>();
             String json = OkHttp.string(pollApi, getHeader(), responseHeaders);
             
+            SpiderDebug.log("===[Bili Poll Headers Count] " + responseHeaders.size());
+            for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
+                SpiderDebug.log("===[Bili Poll Header] " + entry.getKey() + " -> " + entry.getValue());
+            }
+            
             if (TextUtils.isEmpty(json)) {
                 SpiderDebug.log("===[Bili Poll] 轮询响应体为空，等待下一次轮询...");
                 return;
