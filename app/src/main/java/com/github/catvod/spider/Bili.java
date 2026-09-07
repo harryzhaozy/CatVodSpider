@@ -586,7 +586,7 @@ private void stopPolling() {
             vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
             vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
             list.add(vod);
-            Result.string(list);
+            return Result.string(list);
         }
 
         // 2. 如果是 UP 主空间视频
