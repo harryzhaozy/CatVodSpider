@@ -385,12 +385,6 @@ private void stopPolling() {
     }
 }
 
-private void stopPolling() {
-    if (pollScheduler != null && !pollScheduler.isShutdown()) {
-        pollScheduler.shutdownNow();
-        pollScheduler = null;
-    }
-}
 
     // ====================== 分类与业务逻辑 ======================
 
