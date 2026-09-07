@@ -58,7 +58,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Bili extends Spider {
 
-    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; b_lsid=BEB8EE7F_18742FF8C2E; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; b_nut=100; buvid_fp=711a632b5c876fa8bbcf668c1efba551;";
+    private static final String COOKIE = "buvid3=7238A82F-D821-D23A-FAA5-ADC19C9796B458050infoc;bsource=search_baidu;_uuid=628F6D84-DF8D-ED5A-E4BF-66219979424B58395infoc;  buvid_fp=f7761c3c9bde36415f0299493c60b971;bp_t_offset_55423440=1203047221809905664;b_lsid=C1568F05_19E3B3AD0DE";
     private static String cookie;
 
     private JsonObject extend;
@@ -721,17 +721,13 @@ private void stopPolling() {
             // 在主线程触发配置弹窗
             Init.run(this::showPeizhiDialog);
 
-            // 构建并返回一个空的 Detail Result，防止 TV 壳子因数据为空抛出 NPE 或继续发 API 请求
-            Result result = new Result();
-            List<Vod> list = new ArrayList<>();
-            
-            Vod vod = new Vod();
-            vod.setVodId("login_setting");
-            vod.setVodName("Bilibili 账号配置");
-            //vod.setVodPlayFrom("配置交互");
-            //vod.setVodPlayUrl("点击界面选项进行操作$blank");
-            list.add(vod);
-            return Result.string(list);
+            try {
+                org.json.JSONObject json = new org.json.JSONObject();
+                json.put("list", new org.json.JSONArray());
+                return json.toString();
+            } catch (Exception e) {
+                return Result.string(new ArrayList<>());
+            }
         }
     } catch (Exception e) {
         SpiderDebug.log("===[Bili Detail Error] " + e.getMessage());
