@@ -577,16 +577,37 @@ private void stopPolling() {
         // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
         if ("peizhi".equals(tid)) {
             //Init.run(this::showPeizhiDialog);
-            Result result = new Result();
-            List<Vod> list = new ArrayList<>();
+            //Result result = new Result();
+            //List<Vod> list = new ArrayList<>();
             // 构建一个占位卡片提示用户（可选，防止部分 TV 壳子展示空白页报错）
-            Vod vod = new Vod();
-            vod.setVodId("login_setting");
-            vod.setVodName("Click to Configure / 点击配置账号");
-            vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
-            vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
-            list.add(vod);
-            return Result.string(list);
+            //Vod vod = new Vod();
+            //vod.setVodId("login_setting");
+            //vod.setVodName("Click to Configure / 点击配置账号");
+            //vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            //vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
+            //list.add(vod);
+            //return Result.string(list);
+            try {
+            org.json.JSONObject json = new org.json.JSONObject();
+            json.put("page", 1);
+            json.put("pagecount", 1);
+            json.put("limit", 1);
+            json.put("total", 1);
+
+            org.json.JSONArray array = new org.json.JSONArray();
+            org.json.JSONObject vodObj = new org.json.JSONObject();
+            vodObj.put("vod_id", "login_setting");
+            vodObj.put("vod_name", "【点击配置 Bilibili 账号】");
+            vodObj.put("vod_pic", "https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录 / 点击登录");
+            array.put(vodObj);
+
+            json.put("list", array);
+            return json.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Category Json Error] " + e.getMessage());
+            return Result.string(new ArrayList<>());
+        }
         }
 
         // 2. 如果是 UP 主空间视频
@@ -707,8 +728,8 @@ private void stopPolling() {
             Vod vod = new Vod();
             vod.setVodId("login_setting");
             vod.setVodName("Bilibili 账号配置");
-            vod.setVodPlayFrom("配置交互");
-            vod.setVodPlayUrl("点击界面选项进行操作$blank");
+            //vod.setVodPlayFrom("配置交互");
+            //vod.setVodPlayUrl("点击界面选项进行操作$blank");
             list.add(vod);
             return Result.string(list);
         }
