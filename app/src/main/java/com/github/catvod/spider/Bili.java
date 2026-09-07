@@ -15,17 +15,13 @@ import com.github.catvod.bean.bili.Page;
 import com.github.catvod.bean.bili.Resp;
 import com.github.catvod.bean.bili.Wbi;
 import com.github.catvod.crawler.Spider;
-import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
+import com.github.catvod.crawler.SpiderDebug;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
@@ -42,8 +38,9 @@ import java.util.Map;
  */
 public class Bili extends Spider {
 
-    private static final String DEFAULT_COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; b_lsid=BEB8EE7F_18742FF8C2E; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; b_nut=100; buvid_fp=711a632b5c876fa8bbcf668c1efba551;";
-    private static String cookie = "";
+    //private static final String COOKIE = "buvid3=84B0395D-C9F2-C490-E92E-A09AB48FE26E71636infoc";
+    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; b_lsid=BEB8EE7F_18742FF8C2E; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; b_nut=100; buvid_fp=711a632b5c876fa8bbcf668c1efba551; SESSDATA=7624af93%2C1696008331%2C862c8%2A42; bili_jct=141a474ef3ce8cf2fedf384e68f6625d; DedeUserID=3493271303096985; DedeUserID__ckMd5=212a836c164605b7; sid=5h4ruv6o; buvid4=978E9208-13DA-F87A-3DC0-0B8EDF46E80434329-123040301-dWliG5BMrUb70r3g583u7w%3D%3D";
+    private static String cookie;
 
     private JsonObject extend;
     private boolean login;
@@ -55,47 +52,21 @@ public class Bili extends Spider {
         headers.put("User-Agent", Util.CHROME);
         headers.put("origin", "https://www.bilibili.com");
         headers.put("Referer", "https://www.bilibili.com/");
-        if (!TextUtils.isEmpty(cookie)) {
-            headers.put("cookie", cookie);
-        }
+        if (cookie != null) headers.put("cookie", cookie);
         return headers;
     }
 
     private void setCookie() {
-        try {
-            if (extend != null && extend.has("cookie")) {
-                cookie = extend.get("cookie").getAsString();
-                if (cookie.startsWith("http")) {
-                    cookie = OkHttp.string(cookie).trim();
-                }
-            }
-            if (TextUtils.isEmpty(cookie)) {
-                cookie = Path.read(getCache());
-            }
-            if (TextUtils.isEmpty(cookie)) {
-                cookie = DEFAULT_COOKIE;
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili setCookie Error] " + e.getMessage());
-        }
+        cookie = extend.get("cookie").getAsString();
+        if (cookie.startsWith("http")) cookie = OkHttp.string(cookie).trim();
+        if (TextUtils.isEmpty(cookie)) cookie = Path.read(getCache());
+        if (TextUtils.isEmpty(cookie)) cookie = COOKIE;
     }
 
     private List<Filter> getFilter() {
         List<Filter> items = new ArrayList<>();
-        items.add(new Filter("order", "排序", Arrays.asList(
-                new Filter.Value("預設", "totalrank"),
-                new Filter.Value("最多點擊", "click"),
-                new Filter.Value("最新發布", "pubdate"),
-                new Filter.Value("最多彈幕", "dm"),
-                new Filter.Value("最多收藏", "stow")
-        )));
-        items.add(new Filter("duration", "時長", Arrays.asList(
-                new Filter.Value("全部時長", "0"),
-                new Filter.Value("60分鐘以上", "4"),
-                new Filter.Value("30~60分鐘", "3"),
-                new Filter.Value("10~30分鐘", "2"),
-                new Filter.Value("10分鐘以下", "1")
-        )));
+        items.add(new Filter("order", "排序", Arrays.asList(new Filter.Value("預設", "totalrank"), new Filter.Value("最多點擊", "click"), new Filter.Value("最新發布", "pubdate"), new Filter.Value("最多彈幕", "dm"), new Filter.Value("最多收藏", "stow"))));
+        items.add(new Filter("duration", "時長", Arrays.asList(new Filter.Value("全部時長", "0"), new Filter.Value("60分鐘以上", "4"), new Filter.Value("30~60分鐘", "3"), new Filter.Value("10~30分鐘", "2"), new Filter.Value("10分鐘以下", "1"))));
         return items;
     }
 
@@ -130,38 +101,45 @@ public class Bili extends Spider {
 
         if (json != null && !json.trim().isEmpty()) {
             try {
-                JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
+                com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
                 if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-                    JsonObject data = jsonObject.getAsJsonObject("data");
+                    com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
                     if (data.has("list") && data.get("list").isJsonArray()) {
-                        JsonArray listArray = data.getAsJsonArray("list");
-                        Gson gson = new Gson();
+                        com.google.gson.JsonArray listArray = data.getAsJsonArray("list");
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
 
-                        for (JsonElement element : listArray) {
+                        for (com.google.gson.JsonElement element : listArray) {
                             if (!element.isJsonObject()) continue;
-                            JsonObject itemObj = element.getAsJsonObject();
-                            JsonObject vodJson = new JsonObject();
+                            com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
+                            com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
+
+                            // 1. 严格拼接 bvid@aid 确保首页视频点击能正常进入详情页
                             String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                             String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
                             String vodId = bvid + "@" + aid;
 
+                            // 2. 提取标题
                             String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+
+                            // 3. 图片路径补全协议头
                             String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
                             if (pic.startsWith("//")) {
                                 pic = "https:" + pic;
                             }
 
+                            // 4. 提取时长（popular 接口的 duration 是秒数整型，转为 mm:ss 显示更美观）
                             String durationStr = "";
                             if (itemObj.has("duration")) {
                                 try {
                                     long duration = itemObj.get("duration").getAsLong();
-                                    durationStr = String.format(Locale.getDefault(), "%02d:%02d", duration / 60, duration % 60);
+                                    durationStr = String.format("%02d:%02d", duration / 60, duration % 60);
                                 } catch (Exception e) {
                                     durationStr = itemObj.get("duration").getAsString();
                                 }
                             }
 
+                            // 装配序列化 JSON
                             vodJson.addProperty("vod_id", vodId);
                             vodJson.addProperty("vod_name", title);
                             vodJson.addProperty("vod_pic", pic);
@@ -175,23 +153,16 @@ public class Bili extends Spider {
                     }
                 }
             } catch (Throwable t) {
-                SpiderDebug.log("===[Bili Home Error] " + t.getMessage());
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Home Error] " + t.getMessage());
             }
         }
+
+        SpiderDebug.log("TVBox homeVideoContent=" + Result.string(list));
         return Result.string(list);
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        // 修复问题：限制只有第 1 页展示二维码卡片，第二页及以后直接返回空，解决生成无限多个码的问题
-        if ("peizhi".equals(tid)) {
-            if ("1".equals(pg)) {
-                return getQrCodeVodList();
-            } else {
-                return Result.string(new ArrayList<Vod>());
-            }
-        }
-
         if (tid.endsWith("/{pg}")) {
             LinkedHashMap<String, Object> params = new LinkedHashMap<>();
             params.put("mid", tid.split("/")[0]);
@@ -203,7 +174,7 @@ public class Bili extends Spider {
                 json = json.replaceAll("\"//", "\"https://");
                 Resp resp = Resp.objectFrom(json);
                 if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-                    JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
+                    com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
                     if (vlist != null && vlist.isJsonArray()) {
                         for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
                             if (item != null && item.getVod() != null) {
@@ -222,49 +193,54 @@ public class Bili extends Spider {
             }
 
             String encodedTid = URLEncoder.encode(tid, "UTF-8");
-            String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword="
-                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
+            String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
+                       + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
 
             String json = OkHttp.string(api, getHeader());
             List<Vod> list = new ArrayList<>();
 
             if (json != null && !json.trim().isEmpty()) {
                 try {
-                    JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
+                    com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
                     if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-                        JsonObject data = jsonObject.getAsJsonObject("data");
+                        com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
                         if (data.has("result") && data.get("result").isJsonArray()) {
-                            JsonArray resultArray = data.getAsJsonArray("result");
-                            Gson gson = new Gson();
+                            com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
+                            com.google.gson.Gson gson = new com.google.gson.Gson();
 
-                            for (JsonElement element : resultArray) {
+                            for (com.google.gson.JsonElement element : resultArray) {
                                 if (!element.isJsonObject()) continue;
-                                JsonObject itemObj = element.getAsJsonObject();
+                                com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
                                 if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                                    JsonObject vodJson = new JsonObject();
+                                    com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
 
+                                    // 1. 严格按照 detailContent 的要求拼接 bvid@aid 解决点击空白问题
                                     String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                                     String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
                                     String vodId = bvid + "@" + aid;
 
+                                    // 2. 精细清洗标题中的所有 HTML 标签与实体字符
                                     String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
                                     if (!title.isEmpty()) {
                                         title = title.replaceAll("<[^>]*>", "")
-                                                .replaceAll("&quot;", "\"")
-                                                .replaceAll("&amp;", "&")
-                                                .replaceAll("&lt;", "<")
-                                                .replaceAll("&gt;", ">")
-                                                .replaceAll("&nbsp;", " ");
+                                                     .replaceAll("&quot;", "\"")
+                                                     .replaceAll("&amp;", "&")
+                                                     .replaceAll("&lt;", "<")
+                                                     .replaceAll("&gt;", ">")
+                                                     .replaceAll("&nbsp;", " ");
                                     }
 
+                                    // 3. 图片路径补全协议头
                                     String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
                                     if (pic.startsWith("//")) {
                                         pic = "https:" + pic;
                                     }
 
+                                    // 4. 时长备注
                                     String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
 
+                                    // 装配成符合 Vod 序列化注解的 JsonObject
                                     vodJson.addProperty("vod_id", vodId);
                                     vodJson.addProperty("vod_name", title);
                                     vodJson.addProperty("vod_pic", pic);
@@ -279,7 +255,7 @@ public class Bili extends Spider {
                         }
                     }
                 } catch (Throwable t) {
-                    SpiderDebug.log("===[Bili Category Error] " + t.getMessage());
+                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Error] " + t.getMessage());
                 }
             }
 
@@ -287,53 +263,8 @@ public class Bili extends Spider {
         }
     }
 
-    /**
-     * 获取 B站 登录二维码卡片
-     */
-    private String getQrCodeVodList() {
-        List<Vod> list = new ArrayList<>();
-        try {
-            String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate";
-            String json = OkHttp.string(api, getHeader());
-
-            if (!TextUtils.isEmpty(json)) {
-                JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
-                if (jsonObject.has("data")) {
-                    JsonObject data = jsonObject.getAsJsonObject("data");
-                    String url = data.get("url").getAsString();
-                    String qrcodeKey = data.get("qrcode_key").getAsString();
-
-                    String qrImgUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + URLEncoder.encode(url, "UTF-8");
-
-                    Gson gson = new Gson();
-                    JsonObject vodJson = new JsonObject();
-                    vodJson.addProperty("vod_id", "qrcode@" + qrcodeKey);
-                    vodJson.addProperty("vod_name", "【哔哩哔哩扫码登录】点击确认登录状态");
-                    vodJson.addProperty("vod_pic", qrImgUrl);
-                    vodJson.addProperty("vod_remarks", "请使用 B站 App 扫码后在此点击");
-
-                    Vod vod = gson.fromJson(vodJson, Vod.class);
-                    if (vod != null) {
-                        list.add(vod);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili QR Generate Error] " + e.getMessage());
-        }
-        return Result.string(list);
-    }
-
     @Override
     public String detailContent(List<String> ids) throws Exception {
-        String id = ids.get(0);
-
-        // 拦截扫码卡片点击，进入轮询逻辑
-        if (id.startsWith("qrcode@")) {
-            String qrcodeKey = id.split("@")[1];
-            return checkQrCodeStatus(qrcodeKey);
-        }
-
         if (!login) checkLogin();
 
         String[] split = ids.get(0).split("@");
@@ -354,133 +285,37 @@ public class Bili extends Spider {
 
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
-        
-        // 已登录请求最高支持画质，未登录请求 480P (qn=30)
-        int defaultQn = login ? (isVip ? 127 : 80) : 30;
-        api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=" + defaultQn + "&fnval=4048&fourk=1";
+        api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
         json = OkHttp.string(api, getHeader());
-        
-        try {
-            Data play = Resp.objectFrom(json).getData();
-            if (play != null && play.getAcceptQuality() != null) {
-                for (int i = 0; i < play.getAcceptQuality().size(); i++) {
-                    int qn = play.getAcceptQuality().get(i);
-                    
-                    // 未登录用户保留 <= 32 的清晰度 (包含 30/480P 和 16/360P)
-                    if (!login && qn > 32) continue;
-                    // 非大会员保留 <= 80 的清晰度 (包含 1080P)
-                    if (login && !isVip && qn > 80) continue;
-                    
-                    acceptQuality.add(qn);
-                    acceptDesc.add(play.getAcceptDescription().get(i));
-                }
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Detail PlayUrl Error] " + e.getMessage());
-        }
-
-        // 保底逻辑：防空数组导致后续播放链接拼接异常
-        if (acceptQuality.isEmpty()) {
-            if (login) {
-                acceptQuality.add(80);
-                acceptDesc.add("1080P 高清");
-            } else {
-                acceptQuality.add(30);
-                acceptDesc.add("480P 清晰");
-                acceptQuality.add(16);
-                acceptDesc.add("360P 流畅");
-            }
+        Data play = Resp.objectFrom(json).getData();
+        for (int i = 0; i < play.getAcceptQuality().size(); i++) {
+            int qn = play.getAcceptQuality().get(i);
+            if (!login && qn > 32) continue;
+            if (!isVip && qn > 80) continue;
+            acceptQuality.add(play.getAcceptQuality().get(i));
+            acceptDesc.add(play.getAcceptDescription().get(i));
         }
 
         List<String> episode = new ArrayList<>();
         LinkedHashMap<String, String> flag = new LinkedHashMap<>();
-        for (Page page : detail.getPages()) {
-            episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
-        }
+        for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         flag.put("B站", TextUtils.join("#", episode));
 
         episode = new ArrayList<>();
         api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
         json = OkHttp.string(api, getHeader());
-        try {
-            JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
-            if (array != null) {
-                for (int i = 0; i < array.size(); i++) {
-                    JsonObject object = array.get(i).getAsJsonObject();
-                    episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
-                }
-            }
-        } catch (Exception ignored) {
+        JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
+        for (int i = 0; i < array.size(); i++) {
+            JsonObject object = array.get(i).getAsJsonObject();
+            episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
         }
         flag.put("相关", TextUtils.join("#", episode));
+        String vod_play_from=TextUtils.join("$$$", flag.keySet());
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        return Result.string(vod);
-    }
-
-    /**
-     * 轮询 B站 二维码状态并写出 Cookie
-     */
-    private String checkQrCodeStatus(String qrcodeKey) {
-        Vod vod = new Vod();
-        try {
-            if ("success".equals(qrcodeKey)) {
-                vod.setVodId("qrcode@success");
-                vod.setVodName("当前已处于登录成功状态");
-                vod.setVodRemarks("请返回上级页面继续正常浏览");
-                return Result.string(vod);
-            }
-
-            String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey;
-            String json = OkHttp.string(api, getHeader());
-
-            if (!TextUtils.isEmpty(json)) {
-                JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
-                if (jsonObject.has("data")) {
-                    JsonObject data = jsonObject.getAsJsonObject("data");
-                    int code = data.get("code").getAsInt();
-                    String message = data.get("message").getAsString();
-
-                    if (code == 0) {
-                        if (data.has("url")) {
-                            String redirectUrl = data.get("url").getAsString();
-                            StringBuilder newCookie = new StringBuilder();
-
-                            if (redirectUrl.contains("?")) {
-                                String queryString = redirectUrl.substring(redirectUrl.indexOf("?") + 1);
-                                String[] params = queryString.split("&");
-                                for (String param : params) {
-                                    String[] kv = param.split("=", 2);
-                                    if (kv.length == 2) {
-                                        newCookie.append(kv[0]).append("=").append(kv[1]).append("; ");
-                                    }
-                                }
-                            }
-
-                            if (newCookie.length() > 0) {
-                                cookie = newCookie.toString().trim();
-                                Path.write(getCache(), cookie);
-                                login = true;
-                                SpiderDebug.log("===[Bili Login Success] Cookie saved: " + cookie);
-                            }
-                        }
-
-                        vod.setVodId("qrcode@success");
-                        vod.setVodName("登录成功！Cookie 已写入缓存");
-                        vod.setVodRemarks("请按返回键返回列表，开始播放高画质内容");
-                        vod.setVodContent("保存的 Cookie：" + cookie);
-                        return Result.string(vod);
-                    } else {
-                        vod.setVodId("qrcode@" + qrcodeKey);
-                        vod.setVodName("扫码状态：" + message);
-                        vod.setVodRemarks("请在手机 App 上确认登录后，再次点击尝试");
-                        return Result.string(vod);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Poll QR Error] " + e.getMessage());
-        }
+        SpiderDebug.log("TVBox VodContent=" + vod.getVodContent());
+        SpiderDebug.log("TVBox vod_play_url=" + vod.getVodPlayUrl());
+        SpiderDebug.log("TVBox VodPlayFrom=" + vod_play_from);
         return Result.string(vod);
     }
 
@@ -494,7 +329,6 @@ public class Bili extends Spider {
         return categoryContent(key, pg, true, new HashMap<>());
     }
 
-    // 保持你原有的 playerContent 实现，完全不做改变
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String[] ids = id.split("\\+");
@@ -509,11 +343,10 @@ public class Bili extends Spider {
             url.add(Proxy.getUrl() + "?do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
         SpiderDebug.log("TVBox  playerContent url" + url);
-        SpiderDebug.log("TVBox  playerContent Result:" + Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
+        SpiderDebug.log("TVBox  playerContent Result:" +Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
-    // 保持你原有的 proxy 本地代理实现，完全不做改变
     public static Object[] proxy(Map<String, String> params) {
         String aid = params.get("aid");
         String cid = params.get("cid");
@@ -543,7 +376,6 @@ public class Bili extends Spider {
     }
 
     private static void findAudio(Dash dash, StringBuilder sb) {
-        if (dash.getAudio() == null) return;
         for (Media audio : dash.getAudio()) {
             for (String key : getAudioFormat().keySet()) {
                 if (audio.getId().equals(key)) {
@@ -554,7 +386,6 @@ public class Bili extends Spider {
     }
 
     private static void findVideo(Dash dash, StringBuilder sb, String qn) {
-        if (dash.getVideo() == null) return;
         for (Media video : dash.getVideo()) {
             if (video.getId().equals(qn)) {
                 sb.append(getMedia(video));
@@ -566,7 +397,7 @@ public class Bili extends Spider {
         if (media.getMimeType().startsWith("video")) {
             return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()));
         } else if (media.getMimeType().startsWith("audio")) {
-            return getAdaptationSet(media, String.format(Locale.getDefault(), "numChannels='2' sampleRate='%s'", getAudioFormat().get(media.getId())));
+            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", getAudioFormat().get(media.getId())));
         } else {
             return "";
         }
@@ -584,17 +415,10 @@ public class Bili extends Spider {
     }
 
     private void checkLogin() {
-        try {
-            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
-            Resp resp = Resp.objectFrom(json);
-            if (resp != null && resp.getData() != null) {
-                Data data = resp.getData();
-                login = data.isLogin();
-                isVip = data.isVip();
-                wbi = data.getWbi();
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili checkLogin Error] " + e.getMessage());
-        }
+        String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
+        Data data = Resp.objectFrom(json).getData();
+        login = data.isLogin();
+        isVip = data.isVip();
+        wbi = data.getWbi();
     }
 }
