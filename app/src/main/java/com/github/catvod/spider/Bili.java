@@ -586,13 +586,7 @@ private void stopPolling() {
             vod.setVodPic("https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
             vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
             list.add(vod);
-
-            result.setList(list);
-            result.setPage(1);
-            result.setPagecount(1);
-            result.setLimit(1);
-            result.setTotal(1);
-            return result.toString();
+            Result.string(list);
         }
 
         // 2. 如果是 UP 主空间视频
@@ -716,9 +710,7 @@ private void stopPolling() {
             vod.setVodPlayFrom("配置交互");
             vod.setVodPlayUrl("点击界面选项进行操作$blank");
             list.add(vod);
-
-            result.setList(list);
-            return result.toString();
+            return Result.string(list);
         }
     } catch (Exception e) {
         SpiderDebug.log("===[Bili Detail Error] " + e.getMessage());
