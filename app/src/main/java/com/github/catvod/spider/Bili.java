@@ -289,7 +289,7 @@ public class Bili extends Spider {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 使用 CatVod 原生的 OkHttp.string
+            // 1. 轮询接口
             String json = OkHttp.string(pollApi, getHeader());
             if (TextUtils.isEmpty(json)) return;
 
@@ -299,78 +299,38 @@ public class Bili extends Spider {
             JsonObject data = obj.getAsJsonObject("data");
             int code = data.get("code").getAsInt();
 
-            if (code == 0) { // 登录成功
+            if (code == 0) { // 扫码登录成功
                 stopPolling();
                 
                 StringBuilder cookieBuilder = new StringBuilder();
 
-                // 1. 使用 Java 标准 HttpURLConnection 访问 crossDomain 地址提取 Set-Cookie
+                // 2. 访问 crossDomain 跳转地址，并用 Map 接收 Response Header 中的 Set-Cookie
                 if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
                     String redirectUrl = data.get("url").getAsString();
                     
-                    java.net.HttpURLConnection conn = null;
-                    try {
-                        java.net.URL url = new java.net.URL(redirectUrl);
-                        conn = (java.net.HttpURLConnection) url.openConnection();
-                        
-                        // 解决 Android 6.0 老旧系统证书信任链缺失 (Trust anchor not found)
-                        if (conn instanceof javax.net.ssl.HttpsURLConnection) {
-                            javax.net.ssl.HttpsURLConnection httpsConn = (javax.net.ssl.HttpsURLConnection) conn;
-                            
-                            javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[]{
-                                new javax.net.ssl.X509TrustManager() {
-                                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return new java.security.cert.X509Certificate[0]; }
-                                    public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
-                                    public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
-                                }
-                            };
+                    // 定义一个 Map 用于接收接口返回的 Header
+                    Map<String, String> responseHeaders = new HashMap<>();
+                    
+                    // 使用 CatVod 框架封装的 OkHttp 请求（已内置 SSL 证书与 TLS 兼容）
+                    OkHttp.string(redirectUrl, getHeader(), responseHeaders);
 
-                            javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
-                            sc.init(null, trustAllCerts, new java.security.SecureRandom());
-                            
-                            httpsConn.setSSLSocketFactory(sc.getSocketFactory());
-                            httpsConn.setHostnameVerifier((hostname, session) -> true);
-                        }
-
-                        conn.setRequestMethod("GET");
-                        conn.setConnectTimeout(10000);
-                        conn.setReadTimeout(10000);
-                        conn.setInstanceFollowRedirects(false); // 禁止自动跳转
-
-                        // 注入 Header
-                        Map<String, String> headers = getHeader();
-                        if (headers != null) {
-                            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                                conn.setRequestProperty(entry.getKey(), entry.getValue());
-                            }
-                        }
-
-                        conn.connect();
-
-                        // 提取 Set-Cookie
-                        Map<String, List<String>> headerFields = conn.getHeaderFields();
-                        if (headerFields != null) {
-                            for (Map.Entry<String, List<String>> entry : headerFields.entrySet()) {
-                                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
-                                    for (String ck : entry.getValue()) {
-                                        if (!TextUtils.isEmpty(ck)) {
-                                            String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
-                                            cookieBuilder.append(kv).append("; ");
-                                        }
-                                    }
+                    // 从返回的 Header 中寻找 set-cookie / Set-Cookie
+                    for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
+                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("set-cookie")) {
+                            String cookieValue = entry.getValue();
+                            if (!TextUtils.isEmpty(cookieValue)) {
+                                // 处理可能包含多个 Cookie 的情况
+                                String[] cookies = cookieValue.split("\n");
+                                for (String ck : cookies) {
+                                    String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等核心凭证
+                                    cookieBuilder.append(kv).append("; ");
                                 }
                             }
-                        }
-                    } catch (Exception e) {
-                        SpiderDebug.log("===[Bili CrossDomain Fetch Cookie Error] " + e.getMessage());
-                    } finally {
-                        if (conn != null) {
-                            conn.disconnect();
                         }
                     }
                 }
 
-                // 2. 如果成功提取到 Cookie，保存至本地缓存
+                // 3. 保存新提取到的 Cookie
                 if (cookieBuilder.length() > 0) {
                     cookie = cookieBuilder.toString().trim();
                     Path.write(getCache(), cookie);
@@ -380,7 +340,7 @@ public class Bili extends Spider {
                 // 重新校验登录状态
                 checkLogin();
 
-                // 3. 跨线程安全关闭弹窗
+                // 4. 切换到主线程关闭弹窗
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
