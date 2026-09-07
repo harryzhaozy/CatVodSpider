@@ -105,6 +105,16 @@ public class Bili extends Spider {
         this.extend = Json.safeObject(extend);
         setCookie();
         checkLogin();
+        static {
+            try {
+                if (java.net.CookieHandler.getDefault() == null) {
+                    java.net.CookieHandler.setDefault(new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL));
+                    SpiderDebug.log("===[Bili Init] 全局 CookieManager 注册成功");
+                }
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Init Error] CookieManager 注册失败: " + e.getMessage());
+            }
+        }
     }
 
     private void checkLogin() {
@@ -284,15 +294,19 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
-    SpiderDebug.log("===[Bili Poll] 开始发起二维码轮询，qrcodeKey: " + qrcodeKey);
+    SpiderDebug.log("===[Bili Poll] 开始单接口二维码轮询，qrcodeKey: " + qrcodeKey);
+    
     pollScheduler = Executors.newSingleThreadScheduledExecutor();
     pollScheduler.scheduleAtFixedRate(() -> {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 直接调用 CatVod 标准 OkHttp.string()
+            // 每次轮询前，清空一次旧域名的临时 Cookie 存储，确保拿到的是最新下发的凭证
+            java.net.CookieManager cm = (java.net.CookieManager) java.net.CookieHandler.getDefault();
+            
+            // 发起单次 poll 请求（底层会自动将 Set-Cookie 写入 CookieManager）
             String json = OkHttp.string(pollApi, getHeader());
-             SpiderDebug.log("===[Bili Poll] Json : " + json);
+            
             if (TextUtils.isEmpty(json)) return;
 
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
@@ -302,73 +316,62 @@ public class Bili extends Spider {
             int code = data.get("code").getAsInt();
             String message = data.has("message") ? data.get("message").getAsString() : "";
 
-            // 打印轮询状态
             SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
 
-            if (code == 0) { // 扫码登录成功
-    SpiderDebug.log("===[Bili Poll] 监测到扫码成功！准备处理登录凭证...");
-    stopPolling();
+            if (code == 0) { // 扫码登录成功！
+                SpiderDebug.log("===[Bili Poll] 扫码成功，直接从全局 CookieStore 提取单次轮询下发的 Cookie...");
+                stopPolling();
 
-    // 1. 构造一个干净的 Header（包含通用 User-Agent，但不含旧 Cookie）
-    Map<String, String> cleanHeader = new HashMap<>();
-    cleanHeader.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
-    cleanHeader.put("Referer", "https://www.bilibili.com/");
+                // 从全局 CookieStore 提取刚才 poll 接口写入的 Cookie
+                if (cm != null) {
+                    List<java.net.HttpCookie> cookies = cm.getCookieStore().get(java.net.URI.create("https://passport.bilibili.com"));
+                    // 如果 passport 域为空，再查一次 bilibili.com 主域
+                    if (cookies.isEmpty()) {
+                        cookies = cm.getCookieStore().get(java.net.URI.create("https://bilibili.com"));
+                    }
 
-    // 2. 如果存在 crossDomain 跳转 URL，使用干净 Header 请求一次，触发新凭证写入全局 CookieManager
-    if (data.has("url") && !TextUtils.isEmpty(data.get("url").getAsString())) {
-        String redirectUrl = data.get("url").getAsString();
-        SpiderDebug.log("===[Bili Poll] 正在发起 crossDomain 换取新 Cookie: " + redirectUrl);
-        
-        // 关键：传入 cleanHeader，避免旧 Cookie 干扰鉴权
-        OkHttp.string(redirectUrl, cleanHeader);
-    }
+                    StringBuilder sb = new StringBuilder();
+                    for (java.net.HttpCookie ck : cookies) {
+                        sb.append(ck.getName()).append("=").append(ck.getValue()).append("; ");
+                    }
 
-    // 3. 从全局 CookieManager 提取注入的新 Cookie
-    java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
-    if (cookieManager != null) {
-        List<java.net.HttpCookie> cookies = cookieManager.getCookieStore().get(java.net.URI.create("https://bilibili.com"));
-        StringBuilder sb = new StringBuilder();
-        
-        for (java.net.HttpCookie ck : cookies) {
-            // 拼接成标准的 Cookie 格式
-            sb.append(ck.getName()).append("=").append(ck.getValue()).append("; ");
-        }
+                    if (sb.length() > 0) {
+                        cookie = sb.toString().trim();
+                        // 1. 持久化保存到本地缓存
+                        Path.write(getCache(), cookie);
+                        SpiderDebug.log("===[Bili Poll Success] 单次请求成功提取 Cookie: " + cookie);
+                    } else {
+                        SpiderDebug.log("===[Bili Poll Warning] code=0 但 CookieStore 中未找到对应 Cookie！");
+                    }
+                }
 
-        if (sb.length() > 0) {
-            cookie = sb.toString().trim();
-            // 持久化保存新 Cookie
-            Path.write(getCache(), cookie);
-            SpiderDebug.log("===[Bili Poll Success] 新 Cookie 提取并持久化成功: " + cookie);
-        } else {
-            SpiderDebug.log("===[Bili Poll Warning] CookieStore 中获取 bilibili.com 的 Cookie 为空！");
-        }
-    }
+                // 2. 刷新登录状态
+                checkLogin();
 
-    checkLogin();
+                // 3. 跨线程安全关闭弹窗
+                Init.run(() -> {
+                    try {
+                        if (qrDialog != null && qrDialog.isShowing()) {
+                            qrDialog.dismiss();
+                            SpiderDebug.log("===[Bili Poll UI] 二维码 Dialog 弹窗已成功 Dismiss");
+                        }
+                        Toast.makeText(Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        SpiderDebug.log("===[Bili Poll UI Error] " + e.getMessage());
+                    }
+                });
 
-    // 4. 关闭弹窗
-    Init.run(() -> {
-        try {
-            if (qrDialog != null && qrDialog.isShowing()) {
-                qrDialog.dismiss();
-            }
-            Toast.makeText(Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Poll UI Error] " + e.getMessage());
-        }
-    });
-} else if (code == 86038) { // 二维码失效
-                SpiderDebug.log("===[Bili Poll] 二维码已失效 (code: 86038)");
+            } else if (code == 86038) { // 二维码失效
+                SpiderDebug.log("===[Bili Poll] 二维码已失效，停止轮询");
                 stopPolling();
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
                             qrDialog.dismiss();
-                            SpiderDebug.log("===[Bili Poll UI] 失效二维码 Dialog 已关闭");
                         }
                         Toast.makeText(Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
-                        SpiderDebug.log("===[Bili Poll UI Error] 关闭 Dialog 异常: " + e.getMessage());
+                        SpiderDebug.log("===[Bili Poll UI Error] " + e.getMessage());
                     }
                 });
             }
