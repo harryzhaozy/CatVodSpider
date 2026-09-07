@@ -282,114 +282,71 @@ public class Bili extends Spider {
         }
     }
 
-   private void startPolling(String qrcodeKey) {
-    stopPolling();
-    pollScheduler = Executors.newSingleThreadScheduledExecutor();
-    pollScheduler.scheduleAtFixedRate(() -> {
-        try {
-            String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
+   // 1. 使用 Java 标准 HttpURLConnection 访问 crossDomain 地址提取 Set-Cookie
+if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
+    String redirectUrl = data.get("url").getAsString();
+    
+    java.net.HttpURLConnection conn = null;
+    try {
+        java.net.URL url = new java.net.URL(redirectUrl);
+        conn = (java.net.HttpURLConnection) url.openConnection();
+        
+        // 【关键修复】：如果连接是 HttpsURLConnection，跳过 SSL 证书校验，解决 Android 6.0 证书信任链缺失
+        if (conn instanceof javax.net.ssl.HttpsURLConnection) {
+            javax.net.ssl.HttpsURLConnection httpsConn = (javax.net.ssl.HttpsURLConnection) conn;
             
-            // 轮询接口继续使用 CatVod 原生的 OkHttp.string
-            String json = OkHttp.string(pollApi, getHeader());
-            if (TextUtils.isEmpty(json)) return;
-
-            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
-            if (!obj.has("data")) return;
-
-            JsonObject data = obj.getAsJsonObject("data");
-            int code = data.get("code").getAsInt();
-
-            if (code == 0) { // 登录成功
-                stopPolling();
-                
-                StringBuilder cookieBuilder = new StringBuilder();
-
-                // 1. 使用 Java 标准 HttpURLConnection 访问 crossDomain 地址提取 Set-Cookie
-                // 零第三方库依赖，100% 兼容 Android TV 6 及全版本
-                if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
-                    String redirectUrl = data.get("url").getAsString();
-                    
-                    java.net.HttpURLConnection conn = null;
-                    try {
-                        java.net.URL url = new java.net.URL(redirectUrl);
-                        conn = (java.net.HttpURLConnection) url.openConnection();
-                        conn.setRequestMethod("GET");
-                        conn.setConnectTimeout(10000);
-                        conn.setReadTimeout(10000);
-                        conn.setInstanceFollowRedirects(false); // 禁止自动跳转，直接读取本页面的 Set-Cookie
-
-                        // 注入通用 Header
-                        Map<String, String> headers = getHeader();
-                        if (headers != null) {
-                            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                                conn.setRequestProperty(entry.getKey(), entry.getValue());
-                            }
-                        }
-
-                        conn.connect();
-
-                        // 提取 Set-Cookie
-                        Map<String, List<String>> headerFields = conn.getHeaderFields();
-                        if (headerFields != null) {
-                            for (Map.Entry<String, List<String>> entry : headerFields.entrySet()) {
-                                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
-                                    for (String ck : entry.getValue()) {
-                                        if (!TextUtils.isEmpty(ck)) {
-                                            String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
-                                            cookieBuilder.append(kv).append("; ");
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        SpiderDebug.log("===[Bili CrossDomain Fetch Cookie Error] " + e.getMessage());
-                    } finally {
-                        if (conn != null) {
-                            conn.disconnect();
-                        }
-                    }
+            // 创建信任所有证书的 TrustManager
+            javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[]{
+                new javax.net.ssl.X509TrustManager() {
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return new java.security.cert.X509Certificate[0]; }
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
                 }
+            };
 
-                // 2. 如果成功提取到 Cookie，保存至本地缓存
-                if (cookieBuilder.length() > 0) {
-                    cookie = cookieBuilder.toString().trim();
-                    Path.write(getCache(), cookie);
-                    SpiderDebug.log("===[Bili Login Success] Cookie Saved: " + cookie);
-                }
-
-                // 重新校验登录状态
-                checkLogin();
-
-                // 3. 跨线程安全关闭弹窗
-                Init.run(() -> {
-                    try {
-                        if (qrDialog != null && qrDialog.isShowing()) {
-                            qrDialog.dismiss();
-                        }
-                        Toast.makeText(Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
-                    } catch (Exception e) {
-                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
-                    }
-                });
-
-            } else if (code == 86038) { // 二维码失效
-                stopPolling();
-                Init.run(() -> {
-                    try {
-                        if (qrDialog != null && qrDialog.isShowing()) {
-                            qrDialog.dismiss();
-                        }
-                        Toast.makeText(Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
-                    } catch (Exception e) {
-                        SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
-                    }
-                });
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Poll Exception] " + e.getMessage());
+            javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
+            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+            
+            httpsConn.setSSLSocketFactory(sc.getSocketFactory());
+            httpsConn.setHostnameVerifier((hostname, session) -> true); // 允许任意域名
         }
-    }, 0, 2, TimeUnit.SECONDS);
+
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        conn.setInstanceFollowRedirects(false); // 禁止自动重定向
+
+        // 注入 Header
+        Map<String, String> headers = getHeader();
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                conn.setRequestProperty(entry.getKey(), entry.getValue());
+            }
+        }
+
+        conn.connect();
+
+        // 提取 Set-Cookie
+        Map<String, List<String>> headerFields = conn.getHeaderFields();
+        if (headerFields != null) {
+            for (Map.Entry<String, List<String>> entry : headerFields.entrySet()) {
+                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
+                    for (String ck : entry.getValue()) {
+                        if (!TextUtils.isEmpty(ck)) {
+                            String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
+                            cookieBuilder.append(kv).append("; ");
+                        }
+                    }
+                }
+            }
+        }
+    } catch (Exception e) {
+        SpiderDebug.log("===[Bili CrossDomain Fetch Cookie Error] " + e.getMessage());
+    } finally {
+        if (conn != null) {
+            conn.disconnect();
+        }
+    }
 }
 
 private void stopPolling() {
