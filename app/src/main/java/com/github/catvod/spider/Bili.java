@@ -292,19 +292,42 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
-    SpiderDebug.log("===[Bili Poll] 开始单接口二维码轮询，qrcodeKey: " + qrcodeKey);
+    SpiderDebug.log("===[Bili Poll] 开始单接口原生轮询，qrcodeKey: " + qrcodeKey);
     
     pollScheduler = Executors.newSingleThreadScheduledExecutor();
     pollScheduler.scheduleAtFixedRate(() -> {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 确保 CookieManager 随时就绪
-            java.net.CookieManager cm = (java.net.CookieManager) java.net.CookieHandler.getDefault();
-            
-            // 发起单次 poll 请求（底层的 HttpURLConnection / OkHttp 会将 Set-Cookie 自动存入全局 CookieManager）
-            String json = OkHttp.string(pollApi, getHeader());
-            
+            // 使用原生 HttpURLConnection 发起单次请求，确保 Set-Cookie 自动拦截入库
+            java.net.HttpURLConnection conn = null;
+            String json = "";
+            try {
+                java.net.URL url = new java.net.URL(pollApi);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                conn.setRequestProperty("User-Agent", Util.CHROME);
+                conn.setRequestProperty("Referer", "https://www.bilibili.com/");
+                conn.setRequestProperty("origin", "https://www.bilibili.com");
+                if (cookie != null) conn.setRequestProperty("cookie", cookie);
+                // 读取响应体
+                java.io.InputStream in = conn.getInputStream();
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                json = response.toString();
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Poll Http Error] " + e.getMessage());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+
             if (TextUtils.isEmpty(json)) return;
 
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
@@ -317,13 +340,13 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
 
             if (code == 0) { // 扫码登录成功！
-                SpiderDebug.log("===[Bili Poll] 扫码成功，直接从全局 CookieStore 提取单次轮询下发的 Cookie...");
+                SpiderDebug.log("===[Bili Poll Success] 扫码成功，单次请求自动拦截 Cookie，开始提取...");
                 stopPolling();
 
-                // 从全局 CookieStore 提取刚才 poll 接口写入的 Cookie
+                // 此时 HttpURLConnection 在请求完成时，已自动将响应头 Set-Cookie 写入了全局 CookieManager
+                java.net.CookieManager cm = (java.net.CookieManager) java.net.CookieHandler.getDefault();
                 if (cm != null) {
                     List<java.net.HttpCookie> cookies = cm.getCookieStore().get(java.net.URI.create("https://passport.bilibili.com"));
-                    // 如果 passport 域为空，再查一次 bilibili.com 主域
                     if (cookies.isEmpty()) {
                         cookies = cm.getCookieStore().get(java.net.URI.create("https://bilibili.com"));
                     }
@@ -335,18 +358,18 @@ public class Bili extends Spider {
 
                     if (sb.length() > 0) {
                         cookie = sb.toString().trim();
-                        // 1. 持久化保存到本地缓存
+                        // 1. 持久化保存 Cookie
                         Path.write(getCache(), cookie);
-                        SpiderDebug.log("===[Bili Poll Success] 单次请求成功提取 Cookie: " + cookie);
+                        SpiderDebug.log("===[Bili Poll Success] 单接口提取并保存 Cookie 成功: " + cookie);
                     } else {
-                        SpiderDebug.log("===[Bili Poll Warning] code=0 但 CookieStore 中未找到对应 Cookie！");
+                        SpiderDebug.log("===[Bili Poll Warning] CookieStore 依然为空，请检查 init 中 CookieManager 注册");
                     }
                 }
 
                 // 2. 刷新登录状态
                 checkLogin();
 
-                // 3. 跨线程安全关闭弹窗
+                // 3. 关闭 UI 弹窗
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
