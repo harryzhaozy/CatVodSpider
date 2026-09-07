@@ -288,6 +288,7 @@ public class Bili extends Spider {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
+            // 使用 CatVod 框架原生 OkHttp
             String json = OkHttp.string(pollApi, getHeader());
             if (TextUtils.isEmpty(json)) return;
 
@@ -302,18 +303,20 @@ public class Bili extends Spider {
                 
                 StringBuilder cookieBuilder = new StringBuilder();
 
-                // 1. 访问跨域跳转 URL 并直接从 Response Header 提取 Set-Cookie
+                // 1. 请求跨域地址并抓取返回的 Set-Cookie
                 if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
                     String redirectUrl = data.get("url").getAsString();
                     
-                    // 改用 OKResponse 获取带有 Set-Cookie 响应头的完整 Response
-                    OKCallBack.OKResponse response = OkHttp.get(redirectUrl, getHeader());
-                    if (response != null && response.getHeaders() != null) {
-                        List<String> setCookies = response.getHeaders().get("Set-Cookie");
-                        if (setCookies == null) setCookies = response.getHeaders().get("set-cookie"); // 兼容小写
-                        
-                        if (setCookies != null) {
-                            for (String ck : setCookies) {
+                    // 创建 Map 接收 Response Header
+                    Map<String, List<String>> responseHeaders = new java.util.HashMap<>();
+                    
+                    // 使用 CatVod OkHttp 带有 responseHeaders 参数的重载方法
+                    OkHttp.string(redirectUrl, getHeader(), responseHeaders);
+
+                    // 提取 Set-Cookie
+                    for (Map.Entry<String, List<String>> entry : responseHeaders.entrySet()) {
+                        if (entry.getKey() != null && entry.getKey().equalsIgnoreCase("Set-Cookie")) {
+                            for (String ck : entry.getValue()) {
                                 if (!TextUtils.isEmpty(ck)) {
                                     String kv = ck.split(";")[0].trim(); // 提取 SESSDATA=xxx 等键值对
                                     cookieBuilder.append(kv).append("; ");
@@ -323,7 +326,7 @@ public class Bili extends Spider {
                     }
                 }
 
-                // 2. 如果成功提取到 Cookie，保存到本地文件/缓存
+                // 2. 如果成功提取到 Cookie，保存至本地缓存
                 if (cookieBuilder.length() > 0) {
                     cookie = cookieBuilder.toString().trim();
                     Path.write(getCache(), cookie);
@@ -333,13 +336,13 @@ public class Bili extends Spider {
                 // 重新校验登录状态
                 checkLogin();
 
-                // 3. 安全无视 Context 类型的 UI 线程调度，强制关闭界面
-                Init.runOnUI(() -> {
+                // 3. 跨线程安全关闭弹窗
+                Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
                             qrDialog.dismiss();
                         }
-                        Toast.makeText(mContext != null ? mContext : Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(Init.context(), "B站扫码登录成功！", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
                         SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
                     }
@@ -347,12 +350,12 @@ public class Bili extends Spider {
 
             } else if (code == 86038) { // 二维码失效
                 stopPolling();
-                Init.runOnUI(() -> {
+                Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
                             qrDialog.dismiss();
                         }
-                        Toast.makeText(mContext != null ? mContext : Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(Init.context(), "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
                         SpiderDebug.log("===[Bili Dismiss Dialog Error] " + e.getMessage());
                     }
