@@ -72,10 +72,13 @@ public class Bili extends Spider {
 
     private static Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", Util.CHROME);
-        headers.put("origin", "https://www.bilibili.com");
         headers.put("Referer", "https://www.bilibili.com/");
         if (cookie != null) headers.put("cookie", cookie);
+        headers.put("origin", "https://www.bilibili.com");
+        headers.put("User-Agent", Util.CHROME);
+        
+        
+        
         return headers;
     }
 
@@ -384,10 +387,13 @@ public class Bili extends Spider {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", Util.CHROME);
                 conn.setRequestProperty("Referer", "https://www.bilibili.com/");
-                conn.setRequestProperty("origin", "https://www.bilibili.com");
                 if (cookie != null) conn.setRequestProperty("cookie", this.cookie);
+                conn.setRequestProperty("origin", "https://www.bilibili.com");
+                conn.setRequestProperty("User-Agent", Util.CHROME);
+                
+                
+                
                 // 3. 读取响应体
                 java.io.InputStream in = conn.getInputStream();
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
