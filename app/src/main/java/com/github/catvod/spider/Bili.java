@@ -32,8 +32,7 @@ import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.qrcode.QRCodeWriter;
+import com.github.catvod.utils.QRCode;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -204,16 +203,10 @@ public class Bili extends Spider {
 
     private Bitmap createQRCodeBitmap(String content, int width, int height) {
         try {
-            QRCodeWriter qrCodeWriter = new QRCodeWriter();
-            com.google.zxing.common.BitMatrix bitMatrix = qrCodeWriter.encode(content, BarcodeFormat.QR_CODE, width, height);
-            int[] pixels = new int[width * height];
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    pixels[y * width + x] = bitMatrix.get(x, y) ? Color.BLACK : Color.WHITE;
-                }
-            }
-            return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
+            // 直接调用 CatVod 内置的 QRCode 工具类
+            return QRCode.getBitmap(content, width, 0);
         } catch (Exception e) {
+            SpiderDebug.log("===[Bili QRCode Generate Error] " + e.getMessage());
             return null;
         }
     }
