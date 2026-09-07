@@ -368,7 +368,7 @@ public class Bili extends Spider {
                 conn.setRequestProperty("User-Agent", Util.CHROME);
                 conn.setRequestProperty("Referer", "https://www.bilibili.com/");
                 conn.setRequestProperty("origin", "https://www.bilibili.com");
-                if (cookie != null) conn.setRequestProperty("cookie", cookie);
+                if (cookie != null) conn.setRequestProperty("cookie", this.cookie);
                 // 3. 读取响应体
                 java.io.InputStream in = conn.getInputStream();
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
