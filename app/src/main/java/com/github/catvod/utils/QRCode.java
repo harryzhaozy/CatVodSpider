@@ -1,9 +1,6 @@
 package com.github.catvod.utils;
-
 import android.graphics.Bitmap;
 import android.graphics.Color;
-
-import java.io.UnsupportedEncodingEncodingException;
 import java.nio.charset.StandardCharsets;
 
 /**
