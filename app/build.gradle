@@ -48,4 +48,5 @@ dependencies {
     implementation 'com.hierynomus:smbj:0.14.0'
     implementation 'com.orhanobut:logger:2.2.0'
     implementation 'org.jsoup:jsoup:1.19.1'
+    implementation 'com.google.zxing:core:3.5.3'
 }
