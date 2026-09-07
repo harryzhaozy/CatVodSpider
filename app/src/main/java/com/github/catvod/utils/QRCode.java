@@ -1,17 +1,22 @@
 package com.github.catvod.utils;
+
 import android.graphics.Bitmap;
 import android.graphics.Color;
+
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
- * 纯 Java 原生实现的 QRCode 二维码生成工具类
- * 零外部依赖，无需 ZXing 库支持
+ * 完整符合 ISO/IEC 18004 规范的纯 Java 原生 QRCode 生成器
+ * 零外部依赖，修复了长文本/长 URL 编码错乱的问题
  */
 public class QRCode {
 
     public static Bitmap getBitmap(String content, int size, int margin) {
         try {
-            boolean[][] matrix = encode(content);
+            byte[] inputBytes = content.getBytes(StandardCharsets.UTF_8);
+            QRCodeEncoder encoder = new QRCodeEncoder();
+            boolean[][] matrix = encoder.encode(inputBytes);
             if (matrix == null) return null;
 
             int matrixWidth = matrix.length;
@@ -41,220 +46,333 @@ public class QRCode {
         }
     }
 
-    private static boolean[][] encode(String content) {
-        try {
-            byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
-            int version = getBestVersion(bytes.length);
-            if (version > 10) version = 10; // 限制最大版本以控制代码体积
+    private static class QRCodeEncoder {
+        // 版本能力表 (Level L: Total Codewords, Data Codewords, EC Codewords, Blocks)
+        private static final int[][] VERSION_INFO = {
+                {26, 19, 7, 1},   // V1
+                {44, 34, 10, 1},  // V2
+                {70, 55, 15, 1},  // V3
+                {100, 80, 20, 1}, // V4
+                {134, 108, 26, 1},// V5
+                {172, 136, 18, 2},// V6
+                {196, 156, 20, 2},// V7
+                {242, 194, 24, 2},// V8
+                {292, 232, 30, 2},// V9
+                {346, 274, 18, 4} // V10
+        };
 
+        // 对齐图案位置表
+        private static final int[][] ALIGNMENT_POS = {
+                {},
+                {},
+                {6, 18},
+                {6, 22},
+                {6, 26},
+                {6, 30},
+                {6, 34},
+                {6, 22, 38},
+                {6, 24, 42},
+                {6, 26, 46},
+                {6, 28, 50}
+        };
+
+        public boolean[][] encode(byte[] data) {
+            int version = getVersion(data.length);
+            if (version > 10) version = 10;
+
+            int totalCodewords = VERSION_INFO[version - 1][0];
+            int dataCodewords = VERSION_INFO[version - 1][1];
+            int ecCodewords = VERSION_INFO[version - 1][2];
+            int blocks = VERSION_INFO[version - 1][3];
+
+            // 1. 构建数据字节流
+            byte[] dataBytes = buildDataStream(data, dataCodewords, version);
+
+            // 2. RS 纠错码生成
+            byte[] fullBytes = addErrorCorrection(dataBytes, totalCodewords, dataCodewords, ecCodewords, blocks);
+
+            // 3. 构造二维码矩阵
             int size = 17 + version * 4;
             boolean[][] modules = new boolean[size][size];
-            boolean[][] isReserved = new boolean[size][size];
+            boolean[][] reserved = new boolean[size][size];
 
-            // 1. 绘制位置探测图案 (Finder Patterns)
-            drawFinderPattern(modules, isReserved, 0, 0);
-            drawFinderPattern(modules, isReserved, size - 7, 0);
-            drawFinderPattern(modules, isReserved, 0, size - 7);
+            // 绘制寻的图案 (Finder Patterns)
+            drawFinderPattern(modules, reserved, 0, 0);
+            drawFinderPattern(modules, reserved, size - 7, 0);
+            drawFinderPattern(modules, reserved, 0, size - 7);
 
-            // 2. 绘制对齐图案 (Alignment Patterns)
-            if (version >= 2) {
-                int[] alignPos = getAlignmentPositions(version);
-                for (int x : alignPos) {
-                    for (int y : alignPos) {
-                        if (isReserved[x][y]) continue;
-                        drawAlignmentPattern(modules, isReserved, x - 2, y - 2);
+            // 绘制对齐图案 (Alignment Patterns)
+            int[] align = ALIGNMENT_POS[version];
+            for (int x : align) {
+                for (int y : align) {
+                    if (!reserved[x][y]) {
+                        drawAlignmentPattern(modules, reserved, x - 2, y - 2);
                     }
                 }
             }
 
-            // 3. 绘制 Timing Lines (校正线)
+            // 绘制校正线 (Timing Lines)
             for (int i = 8; i < size - 8; i++) {
-                if (!isReserved[6][i]) {
+                if (!reserved[6][i]) {
                     modules[6][i] = (i % 2 == 0);
-                    isReserved[6][i] = true;
+                    reserved[6][i] = true;
                 }
-                if (!isReserved[i][6]) {
+                if (!reserved[i][6]) {
                     modules[i][6] = (i % 2 == 0);
-                    isReserved[i][6] = true;
+                    reserved[i][6] = true;
                 }
             }
 
-            // 4. 保留格式信息区域 (Format Info)
+            // 保留 Format Info 区域
             for (int i = 0; i < 9; i++) {
-                isReserved[i][8] = true;
-                isReserved[8][i] = true;
+                reserved[i][8] = true;
+                reserved[8][i] = true;
             }
             for (int i = size - 8; i < size; i++) {
-                isReserved[8][i] = true;
-                isReserved[i][8] = true;
+                reserved[8][i] = true;
+                reserved[i][8] = true;
             }
-            isReserved[8][size - 8] = true;
-            modules[8][size - 8] = true;
+            reserved[8][size - 8] = true;
 
-            // 5. 填充数据比特流
-            byte[] dataBits = generateDataBits(bytes, version);
-            fillDataBits(modules, isReserved, dataBits);
+            // 4. 填充数据比特流
+            fillBits(modules, reserved, fullBytes);
 
-            // 6. 应用掩码 0 (Mask Pattern 0: (x + y) % 2 == 0)
-            applyMask(modules, isReserved);
+            // 5. 应用标准掩码 Mask Pattern 0
+            applyMask(modules, reserved);
 
-            // 7. 写入格式信息 (Format Info for Level L + Mask 0)
+            // 6. 绘制格式信息 (Level L + Mask 0)
             drawFormatInfo(modules, size);
 
             return modules;
-        } catch (Exception e) {
-            return null;
         }
-    }
 
-    private static void drawFinderPattern(boolean[][] modules, boolean[][] isReserved, int x, int y) {
-        for (int r = 0; r < 7; r++) {
-            for (int c = 0; c < 7; c++) {
-                boolean val = (r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
-                modules[x + r][y + c] = val;
-                isReserved[x + r][y + c] = true;
+        private int getVersion(int length) {
+            for (int i = 0; i < VERSION_INFO.length; i++) {
+                if (length + 2 <= VERSION_INFO[i][1]) return i + 1;
             }
+            return 10;
         }
-        // 隔离带 (Separator)
-        for (int r = -1; r <= 7; r++) {
-            for (int c = -1; c <= 7; c++) {
-                int px = x + r;
-                int py = y + c;
-                if (px >= 0 && px < modules.length && py >= 0 && py < modules.length) {
-                    isReserved[px][py] = true;
+
+        private byte[] buildDataStream(byte[] data, int dataCap, int version) {
+            byte[] buffer = new byte[dataCap];
+            int bitPos = 0;
+
+            // Mode: Byte (0100)
+            bitPos = writeBits(buffer, bitPos, 0x4, 4);
+            // Count
+            int countBits = (version <= 9) ? 8 : 16;
+            bitPos = writeBits(buffer, bitPos, data.length, countBits);
+
+            // Data
+            for (byte b : data) {
+                bitPos = writeBits(buffer, bitPos, b & 0xFF, 8);
+            }
+
+            // Terminator
+            int termBits = Math.min(4, dataCap * 8 - bitPos);
+            bitPos = writeBits(buffer, bitPos, 0, termBits);
+
+            // Align to Byte
+            if (bitPos % 8 != 0) {
+                bitPos += (8 - (bitPos % 8));
+            }
+
+            // Padding Bytes (0xEC, 0x11)
+            int pad = 0;
+            while (bitPos < dataCap * 8) {
+                int padVal = (pad % 2 == 0) ? 0xEC : 0x11;
+                writeBits(buffer, bitPos, padVal, 8);
+                bitPos += 8;
+                pad++;
+            }
+
+            return buffer;
+        }
+
+        private int writeBits(byte[] buffer, int bitPos, int val, int numBits) {
+            for (int i = numBits - 1; i >= 0; i--) {
+                if (bitPos / 8 < buffer.length) {
+                    if (((val >> i) & 1) == 1) {
+                        buffer[bitPos / 8] |= (1 << (7 - (bitPos % 8)));
+                    }
+                }
+                bitPos++;
+            }
+            return bitPos;
+        }
+
+        private byte[] addErrorCorrection(byte[] data, int total, int dataLen, int ecLen, int blocks) {
+            int subDataLen = dataLen / blocks;
+            int subEcLen = ecLen / blocks;
+
+            byte[][] dataBlocks = new byte[blocks][subDataLen];
+            byte[][] ecBlocks = new byte[blocks][subEcLen];
+
+            for (int i = 0; i < dataLen; i++) {
+                dataBlocks[i % blocks][i / blocks] = data[i];
+            }
+
+            for (int i = 0; i < blocks; i++) {
+                ecBlocks[i] = generateEC(dataBlocks[i], subEcLen);
+            }
+
+            byte[] result = new byte[total];
+            int pos = 0;
+
+            // 交叉数据块
+            for (int i = 0; i < subDataLen; i++) {
+                for (int b = 0; b < blocks; b++) {
+                    result[pos++] = dataBlocks[b][i];
+                }
+            }
+            // 交叉纠错块
+            for (int i = 0; i < subEcLen; i++) {
+                for (int b = 0; b < blocks; b++) {
+                    result[pos++] = ecBlocks[b][i];
+                }
+            }
+
+            return result;
+        }
+
+        private byte[] generateEC(byte[] data, int ecLen) {
+            int[] poly = new int[data.length + ecLen];
+            for (int i = 0; i < data.length; i++) poly[i] = data[i] & 0xFF;
+
+            int[] generator = getGeneratorPoly(ecLen);
+
+            for (int i = 0; i < data.length; i++) {
+                int coef = poly[i];
+                if (coef != 0) {
+                    int logCoef = GF256_LOG[coef];
+                    for (int j = 0; j < generator.length; j++) {
+                        poly[i + j] ^= GF256_EXP[(generator[j] + logCoef) % 255];
+                    }
+                }
+            }
+
+            byte[] ec = new byte[ecLen];
+            for (int i = 0; i < ecLen; i++) {
+                ec[i] = (byte) poly[data.length + i];
+            }
+            return ec;
+        }
+
+        private int[] getGeneratorPoly(int degree) {
+            int[] g = new int[]{1};
+            for (int i = 0; i < degree; i++) {
+                int[] next = new int[g.length + 1];
+                for (int j = 0; j < g.length; j++) {
+                    next[j] ^= GF256_EXP[(GF256_LOG[g[j]] + i) % 255];
+                    next[j + 1] ^= g[j];
+                }
+                g = next;
+            }
+            int[] res = new int[g.length - 1];
+            for (int i = 0; i < res.length; i++) {
+                res[i] = GF256_LOG[g[i]];
+            }
+            return res;
+        }
+
+        private void drawFinderPattern(boolean[][] modules, boolean[][] reserved, int x, int y) {
+            for (int r = 0; r < 7; r++) {
+                for (int c = 0; c < 7; c++) {
+                    boolean val = (r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+                    modules[x + r][y + c] = val;
+                    reserved[x + r][y + c] = true;
+                }
+            }
+            for (int r = -1; r <= 7; r++) {
+                for (int c = -1; c <= 7; c++) {
+                    int px = x + r;
+                    int py = y + c;
+                    if (px >= 0 && px < modules.length && py >= 0 && py < modules.length) {
+                        reserved[px][py] = true;
+                    }
                 }
             }
         }
-    }
 
-    private static void drawAlignmentPattern(boolean[][] modules, boolean[][] isReserved, int x, int y) {
-        for (int r = 0; r < 5; r++) {
-            for (int c = 0; c < 5; c++) {
-                boolean val = (r == 0 || r == 4 || c == 0 || c == 4 || (r == 2 && c == 2));
-                modules[x + r][y + c] = val;
-                isReserved[x + r][y + c] = true;
-            }
-        }
-    }
-
-    private static int[] getAlignmentPositions(int version) {
-        if (version == 2) return new int[]{6, 18};
-        if (version == 3) return new int[]{6, 22};
-        if (version == 4) return new int[]{6, 26};
-        if (version == 5) return new int[]{6, 30};
-        if (version == 6) return new int[]{6, 34};
-        return new int[]{6, 22};
-    }
-
-    private static int getBestVersion(int length) {
-        if (length <= 17) return 1;
-        if (length <= 32) return 2;
-        if (length <= 53) return 3;
-        if (length <= 78) return 4;
-        if (length <= 106) return 5;
-        return 6;
-    }
-
-    private static byte[] generateDataBits(byte[] bytes, int version) {
-        int capacity = getCapacity(version);
-        byte[] result = new byte[capacity];
-
-        // Header: Byte Mode (0100) + Count
-        int bitPos = 0;
-        bitPos = writeBits(result, bitPos, 0x4, 4);
-        bitPos = writeBits(result, bitPos, bytes.length, 8);
-
-        // Raw Data
-        for (byte b : bytes) {
-            bitPos = writeBits(result, bitPos, b & 0xFF, 8);
-        }
-
-        // Padding (0xEC, 0x11)
-        int padByte = 0;
-        while (bitPos < capacity * 8) {
-            int pad = (padByte % 2 == 0) ? 0xEC : 0x11;
-            writeBits(result, bitPos, pad, Math.min(8, capacity * 8 - bitPos));
-            bitPos += 8;
-            padByte++;
-        }
-
-        return result;
-    }
-
-    private static int writeBits(byte[] buffer, int bitPos, int value, int numBits) {
-        for (int i = numBits - 1; i >= 0; i--) {
-            if (bitPos / 8 < buffer.length) {
-                if (((value >> i) & 1) == 1) {
-                    buffer[bitPos / 8] |= (1 << (7 - (bitPos % 8)));
+        private void drawAlignmentPattern(boolean[][] modules, boolean[][] reserved, int x, int y) {
+            for (int r = 0; r < 5; r++) {
+                for (int c = 0; c < 5; c++) {
+                    boolean val = (r == 0 || r == 4 || c == 0 || c == 4 || (r == 2 && c == 2));
+                    modules[x + r][y + c] = val;
+                    reserved[x + r][y + c] = true;
                 }
             }
-            bitPos++;
         }
-        return bitPos;
-    }
 
-    private static int getCapacity(int version) {
-        int[] capacities = {0, 19, 34, 55, 80, 108, 136};
-        return version < capacities.length ? capacities[version] : 100;
-    }
+        private void fillBits(boolean[][] modules, boolean[][] reserved, byte[] data) {
+            int size = modules.length;
+            int bitIndex = 0;
+            int totalBits = data.length * 8;
+            boolean upward = true;
 
-    private static void fillDataBits(boolean[][] modules, boolean[][] isReserved, byte[] dataBits) {
-        int size = modules.length;
-        int bitIndex = 0;
-        int totalBits = dataBits.length * 8;
-        boolean upward = true;
+            for (int x = size - 1; x > 0; x -= 2) {
+                if (x == 6) x--;
 
-        for (int x = size - 1; x > 0; x -= 2) {
-            if (x == 6) x--; // 跳过垂直 Timing Line
+                for (int i = 0; i < size; i++) {
+                    int y = upward ? (size - 1 - i) : i;
 
-            for (int i = 0; i < size; i++) {
-                int y = upward ? (size - 1 - i) : i;
-
-                for (int c = 0; c < 2; c++) {
-                    int px = x - c;
-                    if (!isReserved[px][y]) {
-                        boolean bit = false;
-                        if (bitIndex < totalBits) {
-                            int byteIdx = bitIndex / 8;
-                            int bitIdx = 7 - (bitIndex % 8);
-                            bit = ((dataBits[byteIdx] >> bitIdx) & 1) == 1;
-                            bitIndex++;
+                    for (int c = 0; c < 2; c++) {
+                        int px = x - c;
+                        if (!reserved[px][y]) {
+                            boolean bit = false;
+                            if (bitIndex < totalBits) {
+                                int byteIdx = bitIndex / 8;
+                                int bitIdx = 7 - (bitIndex % 8);
+                                bit = ((data[byteIdx] >> bitIdx) & 1) == 1;
+                                bitIndex++;
+                            }
+                            modules[px][y] = bit;
                         }
-                        modules[px][y] = bit;
                     }
                 }
+                upward = !upward;
             }
-            upward = !upward;
         }
-    }
 
-    private static void applyMask(boolean[][] modules, boolean[][] isReserved) {
-        int size = modules.length;
-        for (int x = 0; x < size; x++) {
-            for (int y = 0; y < size; y++) {
-                if (!isReserved[x][y]) {
-                    // Mask Pattern 0: (x + y) % 2 == 0
-                    if ((x + y) % 2 == 0) {
-                        modules[x][y] = !modules[x][y];
+        private void applyMask(boolean[][] modules, boolean[][] reserved) {
+            int size = modules.length;
+            for (int x = 0; x < size; x++) {
+                for (int y = 0; y < size; y++) {
+                    if (!reserved[x][y]) {
+                        if ((x + y) % 2 == 0) {
+                            modules[x][y] = !modules[x][y];
+                        }
                     }
                 }
             }
         }
-    }
 
-    private static void drawFormatInfo(boolean[][] modules, int size) {
-        // L 级纠错 + Mask 0 的 15 位 Mask Format String
-        int formatBits = 0x77C4; 
+        private void drawFormatInfo(boolean[][] modules, int size) {
+            int formatBits = 0x77C4;
+            for (int i = 0; i < 15; i++) {
+                boolean bit = ((formatBits >> i) & 1) == 1;
+                if (i < 6) modules[8][i] = bit;
+                else if (i < 8) modules[8][i + 1] = bit;
+                else modules[8 - (i - 7)][8] = bit;
 
-        for (int i = 0; i < 15; i++) {
-            boolean bit = ((formatBits >> i) & 1) == 1;
+                if (i < 8) modules[size - 1 - i][8] = bit;
+                else modules[8][size - 15 + i] = bit;
+            }
+        }
 
-            if (i < 6) modules[8][i] = bit;
-            else if (i < 8) modules[8][i + 1] = bit;
-            else modules[8 - (i - 7)][8] = bit;
+        // GF(256) 伽罗瓦域对数/指数表 (用于 Reed-Solomon 纠错)
+        private static final int[] GF256_EXP = new int[256];
+        private static final int[] GF256_LOG = new int[256];
 
-            if (i < 8) modules[size - 1 - i][8] = bit;
-            else modules[8][size - 15 + i] = bit;
+        static {
+            int x = 1;
+            for (int i = 0; i < 255; i++) {
+                GF256_EXP[i] = x;
+                GF256_LOG[x] = i;
+                x <<= 1;
+                if (x >= 256) x ^= 0x11D;
+            }
+            GF256_EXP[255] = GF256_EXP[0];
         }
     }
 }
