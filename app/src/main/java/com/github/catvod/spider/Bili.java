@@ -133,9 +133,13 @@ public class Bili extends Spider {
 
     // ====================== 登录配置与扫码界面控制 ======================
 
-    private void showPeizhiDialog() {
-        // 获取顶层 Activity 上下文
-        Activity activity = Init.getActivity();
+   private void showPeizhiDialog() {
+        Activity activity = null;
+        try {
+            activity = Init.getActivity();
+        } catch (Exception ignored) {
+        }
+        
         if (activity == null && mContext instanceof Activity) {
             activity = (Activity) mContext;
         }
@@ -155,7 +159,7 @@ public class Bili extends Spider {
                 builder.setTitle("Bilibili 账号配置");
                 builder.setMessage(statusTip);
 
-                // 按钮1：弹出扫码
+                // 按钮1：扫码登录
                 builder.setPositiveButton("扫码登录", (dialog, which) -> {
                     dialog.dismiss();
                     startQrCodeLogin();
