@@ -292,27 +292,51 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
-    SpiderDebug.log("===[Bili Poll] 开始单接口原生轮询，qrcodeKey: " + qrcodeKey);
+    SpiderDebug.log("===[Bili Poll] 开始单接口（带 SSL 兼容）轮询，qrcodeKey: " + qrcodeKey);
     
+    // 1. 初始化跳过证书校验的 TrustManager（兼容 Android 6.0 系统根证书过老问题）
+    javax.net.ssl.SSLContext sslContext = null;
+    javax.net.ssl.SSLSocketFactory sslSocketFactory = null;
+    try {
+        sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+        sslContext.init(null, new javax.net.ssl.TrustManager[]{
+            new javax.net.ssl.X509TrustManager() {
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() { return new java.security.cert.X509Certificate[0]; }
+                public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
+                public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
+            }
+        }, new java.security.SecureRandom());
+        sslSocketFactory = sslContext.getSocketFactory();
+    } catch (Exception e) {
+        SpiderDebug.log("===[Bili SSL Init Error] " + e.getMessage());
+    }
+
+    final javax.net.ssl.SSLSocketFactory finalSslSocketFactory = sslSocketFactory;
+
     pollScheduler = Executors.newSingleThreadScheduledExecutor();
     pollScheduler.scheduleAtFixedRate(() -> {
         try {
             String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
             
-            // 使用原生 HttpURLConnection 发起单次请求，确保 Set-Cookie 自动拦截入库
             java.net.HttpURLConnection conn = null;
             String json = "";
             try {
                 java.net.URL url = new java.net.URL(pollApi);
                 conn = (java.net.HttpURLConnection) url.openConnection();
+                
+                // 2. 注入 SSL Socket Factory，彻底解决 CertPathValidatorException 报错
+                if (conn instanceof javax.net.ssl.HttpsURLConnection && finalSslSocketFactory != null) {
+                    ((javax.net.ssl.HttpsURLConnection) conn).setSSLSocketFactory(finalSslSocketFactory);
+                    ((javax.net.ssl.HttpsURLConnection) conn).setHostnameVerifier((hostname, session) -> true);
+                }
+
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
-                conn.setRequestProperty("User-Agent", Util.CHROME);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
                 conn.setRequestProperty("Referer", "https://www.bilibili.com/");
-                conn.setRequestProperty("origin", "https://www.bilibili.com");
-                if (cookie != null) conn.setRequestProperty("cookie", cookie);
-                // 读取响应体
+                
+                // 3. 读取响应体
                 java.io.InputStream in = conn.getInputStream();
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
                 StringBuilder response = new StringBuilder();
@@ -340,10 +364,10 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
 
             if (code == 0) { // 扫码登录成功！
-                SpiderDebug.log("===[Bili Poll Success] 扫码成功，单次请求自动拦截 Cookie，开始提取...");
+                SpiderDebug.log("===[Bili Poll Success] 扫码成功，单接口自动截获 Set-Cookie，准备提取...");
                 stopPolling();
 
-                // 此时 HttpURLConnection 在请求完成时，已自动将响应头 Set-Cookie 写入了全局 CookieManager
+                // 4. 从全局 CookieManager 提取这一次单接口请求下发的所有 Cookie
                 java.net.CookieManager cm = (java.net.CookieManager) java.net.CookieHandler.getDefault();
                 if (cm != null) {
                     List<java.net.HttpCookie> cookies = cm.getCookieStore().get(java.net.URI.create("https://passport.bilibili.com"));
@@ -358,18 +382,18 @@ public class Bili extends Spider {
 
                     if (sb.length() > 0) {
                         cookie = sb.toString().trim();
-                        // 1. 持久化保存 Cookie
+                        // 持久化保存 Cookie 到本地缓存
                         Path.write(getCache(), cookie);
                         SpiderDebug.log("===[Bili Poll Success] 单接口提取并保存 Cookie 成功: " + cookie);
                     } else {
-                        SpiderDebug.log("===[Bili Poll Warning] CookieStore 依然为空，请检查 init 中 CookieManager 注册");
+                        SpiderDebug.log("===[Bili Poll Warning] CookieStore 为空，请检查 init 中 CookieManager 是否正常注册");
                     }
                 }
 
-                // 2. 刷新登录状态
+                // 5. 校验登录状态
                 checkLogin();
 
-                // 3. 关闭 UI 弹窗
+                // 6. 跨线程安全关闭 UI 弹窗
                 Init.run(() -> {
                     try {
                         if (qrDialog != null && qrDialog.isShowing()) {
