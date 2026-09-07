@@ -196,69 +196,89 @@ public class Bili extends Spider {
         }
     }
 
-    private void startQrCodeLogin() {
-        try {
-            String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-mini";
-            String json = OkHttp.string(api, getHeader());
-            if (TextUtils.isEmpty(json)) return;
+   private void startQrCodeLogin() {
+        // 在后台线程发起网络请求和二维码绘制，避免 NetworkOnMainThreadException
+        Init.execute(() -> {
+            try {
+                // 1. 获取 B 站二维码 token
+                String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-mini";
+                String json = OkHttp.string(api, getHeader());
+                if (TextUtils.isEmpty(json)) return;
 
-            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
-            if (!obj.has("code") || obj.get("code").getAsInt() != 0) return;
+                JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+                if (!obj.has("code") || obj.get("code").getAsInt() != 0) return;
 
-            JsonObject data = obj.getAsJsonObject("data");
-            String qrUrl = data.get("url").getAsString();
-            String qrcodeKey = data.get("qrcode_key").getAsString();
+                JsonObject data = obj.getAsJsonObject("data");
+                String qrUrl = data.get("url").getAsString();
+                String qrcodeKey = data.get("qrcode_key").getAsString();
 
-            Bitmap bitmap = createQRCodeBitmap(qrUrl, 600, 600);
-            if (bitmap != null) {
-                showQrDialog(bitmap);
-                startPolling(qrcodeKey);
+                // 2. 本地/后台线程绘制二维码图片
+                Bitmap bitmap = createQRCodeBitmap(qrUrl, 600, 600);
+                if (bitmap != null) {
+                    // 3. 切回 UI 主线程显示弹窗，并启动轮询
+                    showQrDialog(bitmap);
+                    startPolling(qrcodeKey);
+                } else {
+                    SpiderDebug.log("===[Bili QrCode Error] Bitmap 生成失败");
+                }
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili QrCode Login Exception] " + e.getMessage());
             }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili QrCode Login Exception] " + e.getMessage());
+        });
+    }
+
+    private void showQrDialog(Bitmap bitmap) {
+        Activity activity = null;
+        try {
+            activity = Init.getActivity();
+        } catch (Exception ignored) {}
+        if (activity == null && mContext instanceof Activity) {
+            activity = (Activity) mContext;
         }
+        if (activity == null) return;
+
+        Activity finalActivity = activity;
+        finalActivity.runOnUiThread(() -> {
+            try {
+                LinearLayout layout = new LinearLayout(finalActivity);
+                layout.setOrientation(LinearLayout.VERTICAL);
+                layout.setPadding(40, 40, 40, 40);
+                layout.setGravity(Gravity.CENTER);
+
+                TextView textView = new TextView(finalActivity);
+                textView.setText("请使用 Bilibili 手机客户端扫码登录");
+                textView.setTextSize(18);
+                textView.setTextColor(Color.BLACK);
+                textView.setPadding(0, 0, 0, 20);
+                textView.setGravity(Gravity.CENTER);
+
+                ImageView imageView = new ImageView(finalActivity);
+                imageView.setImageBitmap(bitmap);
+
+                layout.addView(textView);
+                layout.addView(imageView);
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(finalActivity);
+                builder.setView(layout);
+                builder.setNegativeButton("取消扫码", (dialog, which) -> stopPolling());
+                builder.setOnDismissListener(dialog -> stopPolling());
+
+                qrDialog = builder.create();
+                qrDialog.show();
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Show QR Dialog Exception] " + e.getMessage());
+            }
+        });
     }
 
     private Bitmap createQRCodeBitmap(String content, int width, int height) {
         try {
-            // 直接调用 CatVod 内置的 QRCode 工具类
+            // 调用纯 Java 的 QRCode 本地工具类生成
             return QRCode.getBitmap(content, width, 0);
         } catch (Exception e) {
-            SpiderDebug.log("===[Bili QRCode Generate Error] " + e.getMessage());
+            SpiderDebug.log("===[Bili QRCode Generate Exception] " + e.getMessage());
             return null;
         }
-    }
-
-    private void showQrDialog(Bitmap bitmap) {
-        if (!(mContext instanceof Activity)) return;
-        Activity activity = (Activity) mContext;
-        activity.runOnUiThread(() -> {
-            LinearLayout layout = new LinearLayout(activity);
-            layout.setOrientation(LinearLayout.VERTICAL);
-            layout.setPadding(40, 40, 40, 40);
-            layout.setGravity(Gravity.CENTER);
-
-            TextView textView = new TextView(activity);
-            textView.setText("请使用 Bilibili 手机客户端扫码登录");
-            textView.setTextSize(18);
-            textView.setTextColor(Color.BLACK);
-            textView.setPadding(0, 0, 0, 20);
-            textView.setGravity(Gravity.CENTER);
-
-            ImageView imageView = new ImageView(activity);
-            imageView.setImageBitmap(bitmap);
-
-            layout.addView(textView);
-            layout.addView(imageView);
-
-            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
-            builder.setView(layout);
-            builder.setNegativeButton("取消扫码", (dialog, which) -> stopPolling());
-            builder.setOnDismissListener(dialog -> stopPolling());
-
-            qrDialog = builder.create();
-            qrDialog.show();
-        });
     }
 
     private void startPolling(String qrcodeKey) {
