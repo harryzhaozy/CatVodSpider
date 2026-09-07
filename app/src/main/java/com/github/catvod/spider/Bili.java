@@ -134,30 +134,44 @@ public class Bili extends Spider {
     // ====================== 登录配置与扫码界面控制 ======================
 
     private void showPeizhiDialog() {
-        if (!(mContext instanceof Activity)) return;
-        Activity activity = (Activity) mContext;
-        activity.runOnUiThread(() -> {
-            checkLogin();
-            String statusTip = login ? "当前状态：已登录" : "当前状态：未登录 / Cookie 已失效";
+        // 获取顶层 Activity 上下文
+        Activity activity = Init.getActivity();
+        if (activity == null && mContext instanceof Activity) {
+            activity = (Activity) mContext;
+        }
 
-            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
-            builder.setTitle("Bilibili 账号配置");
-            builder.setMessage(statusTip);
+        if (activity == null) {
+            SpiderDebug.log("===[Bili Error] 无法获取 Activity，无法弹出登录配置窗口");
+            return;
+        }
 
-            // 按钮1：弹出扫码
-            builder.setPositiveButton("扫码登录", (dialog, which) -> {
-                dialog.dismiss();
-                startQrCodeLogin();
-            });
+        Activity finalActivity = activity;
+        finalActivity.runOnUiThread(() -> {
+            try {
+                checkLogin();
+                String statusTip = login ? "当前状态：已登录" : "当前状态：未登录 / Cookie 已失效";
 
-            // 按钮2：清除 Cookie
-            builder.setNegativeButton("清除 Cookie", (dialog, which) -> {
-                clearCookie();
-                dialog.dismiss();
-            });
+                AlertDialog.Builder builder = new AlertDialog.Builder(finalActivity);
+                builder.setTitle("Bilibili 账号配置");
+                builder.setMessage(statusTip);
 
-            builder.setNeutralButton("取消", (dialog, which) -> dialog.dismiss());
-            builder.create().show();
+                // 按钮1：弹出扫码
+                builder.setPositiveButton("扫码登录", (dialog, which) -> {
+                    dialog.dismiss();
+                    startQrCodeLogin();
+                });
+
+                // 按钮2：清除 Cookie
+                builder.setNegativeButton("清除 Cookie", (dialog, which) -> {
+                    clearCookie();
+                    dialog.dismiss();
+                });
+
+                builder.setNeutralButton("取消", (dialog, which) -> dialog.dismiss());
+                builder.create().show();
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Dialog Exception] " + e.getMessage());
+            }
         });
     }
 
