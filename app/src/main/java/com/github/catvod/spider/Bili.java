@@ -1,7 +1,15 @@
 package com.github.catvod.spider;
 
+import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.text.TextUtils;
+import android.view.Gravity;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.github.catvod.bean.Class;
@@ -23,10 +31,17 @@ import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
+import java.net.CookieHandler;
+import java.net.CookieManager;
+import java.net.HttpCookie;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -34,14 +49,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author ColaMint & FongMi & 唐三
  */
 public class Bili extends Spider {
 
-    //private static final String COOKIE = "buvid3=84B0395D-C9F2-C490-E92E-A09AB48FE26E71636infoc";
-    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; b_lsid=BEB8EE7F_18742FF8C2E; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; b_nut=100; buvid_fp=711a632b5c876fa8bbcf668c1efba551; SESSDATA=7624af93%2C1696008331%2C862c8%2A42; bili_jct=141a474ef3ce8cf2fedf384e68f6625d; DedeUserID=3493271303096985; DedeUserID__ckMd5=212a836c164605b7; sid=5h4ruv6o; buvid4=978E9208-13DA-F87A-3DC0-0B8EDF46E80434329-123040301-dWliG5BMrUb70r3g583u7w%3D%3D";
+    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; b_lsid=BEB8EE7F_18742FF8C2E; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; b_nut=100; buvid_fp=711a632b5c876fa8bbcf668c1efba551;";
     private static String cookie;
 
     private JsonObject extend;
@@ -49,6 +66,9 @@ public class Bili extends Spider {
     private boolean isVip;
     private Wbi wbi;
     private Context mContext;
+
+    private AlertDialog qrDialog;
+    private ScheduledExecutorService pollScheduler;
 
     private static Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
@@ -87,6 +107,225 @@ public class Bili extends Spider {
         checkLogin();
     }
 
+    private void checkLogin() {
+        try {
+            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
+            if (json != null && !json.isEmpty()) {
+                Resp resp = Resp.objectFrom(json);
+                if (resp != null && resp.getData() != null) {
+                    Data data = resp.getData();
+                    login = data.isLogin();
+                    isVip = data.isVip();
+                    wbi = data.getWbi();
+                    if (login) {
+                        SpiderDebug.log("===[Bili Status] B站已登录");
+                    } else {
+                        SpiderDebug.log("===[Bili Status] 未登录或 Cookie 已失效");
+                    }
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Check Login Exception] " + e.getMessage());
+        }
+        login = false;
+        isVip = false;
+    }
+
+    // ====================== 登录配置与扫码界面控制 ======================
+
+    private void showPeizhiDialog() {
+        if (!(mContext instanceof Activity)) return;
+        Activity activity = (Activity) mContext;
+        activity.runOnUiThread(() -> {
+            checkLogin();
+            String statusTip = login ? "当前状态：已登录" : "当前状态：未登录 / Cookie 已失效";
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+            builder.setTitle("Bilibili 账号配置");
+            builder.setMessage(statusTip);
+
+            // 按钮1：弹出扫码
+            builder.setPositiveButton("扫码登录", (dialog, which) -> {
+                dialog.dismiss();
+                startQrCodeLogin();
+            });
+
+            // 按钮2：清除 Cookie
+            builder.setNegativeButton("清除 Cookie", (dialog, which) -> {
+                clearCookie();
+                dialog.dismiss();
+            });
+
+            builder.setNeutralButton("取消", (dialog, which) -> dialog.dismiss());
+            builder.create().show();
+        });
+    }
+
+    private void clearCookie() {
+        try {
+            cookie = COOKIE; // 恢复为默认无登录 Cookie
+            File file = getCache();
+            if (file.exists()) {
+                file.delete();
+            }
+            login = false;
+            isVip = false;
+            if (mContext != null) {
+                Init.run(() -> Toast.makeText(mContext, "Cookie 已清除！", Toast.LENGTH_SHORT).show());
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Clear Cookie Error] " + e.getMessage());
+        }
+    }
+
+    private void startQrCodeLogin() {
+        try {
+            String api = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-mini";
+            String json = OkHttp.string(api, getHeader());
+            if (TextUtils.isEmpty(json)) return;
+
+            JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+            if (!obj.has("code") || obj.get("code").getAsInt() != 0) return;
+
+            JsonObject data = obj.getAsJsonObject("data");
+            String qrUrl = data.get("url").getAsString();
+            String qrcodeKey = data.get("qrcode_key").getAsString();
+
+            Bitmap bitmap = createQRCodeBitmap(qrUrl, 600, 600);
+            if (bitmap != null) {
+                showQrDialog(bitmap);
+                startPolling(qrcodeKey);
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili QrCode Login Exception] " + e.getMessage());
+        }
+    }
+
+    private Bitmap createQRCodeBitmap(String content, int width, int height) {
+        try {
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            com.google.zxing.common.BitMatrix bitMatrix = qrCodeWriter.encode(content, BarcodeFormat.QR_CODE, width, height);
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = bitMatrix.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+            }
+            return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void showQrDialog(Bitmap bitmap) {
+        if (!(mContext instanceof Activity)) return;
+        Activity activity = (Activity) mContext;
+        activity.runOnUiThread(() -> {
+            LinearLayout layout = new LinearLayout(activity);
+            layout.setOrientation(LinearLayout.VERTICAL);
+            layout.setPadding(40, 40, 40, 40);
+            layout.setGravity(Gravity.CENTER);
+
+            TextView textView = new TextView(activity);
+            textView.setText("请使用 Bilibili 手机客户端扫码登录");
+            textView.setTextSize(18);
+            textView.setTextColor(Color.BLACK);
+            textView.setPadding(0, 0, 0, 20);
+            textView.setGravity(Gravity.CENTER);
+
+            ImageView imageView = new ImageView(activity);
+            imageView.setImageBitmap(bitmap);
+
+            layout.addView(textView);
+            layout.addView(imageView);
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+            builder.setView(layout);
+            builder.setNegativeButton("取消扫码", (dialog, which) -> stopPolling());
+            builder.setOnDismissListener(dialog -> stopPolling());
+
+            qrDialog = builder.create();
+            qrDialog.show();
+        });
+    }
+
+    private void startPolling(String qrcodeKey) {
+        stopPolling();
+        pollScheduler = Executors.newSingleThreadScheduledExecutor();
+        pollScheduler.scheduleAtFixedRate(() -> {
+            try {
+                String pollApi = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + qrcodeKey + "&source=main-mini";
+                
+                // 完全改用 OkHttp.string()
+                String json = OkHttp.string(pollApi, getHeader());
+                if (TextUtils.isEmpty(json)) return;
+
+                JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+                if (!obj.has("data")) return;
+
+                JsonObject data = obj.getAsJsonObject("data");
+                int code = data.get("code").getAsInt();
+
+                if (code == 0) { // 登录成功
+                    stopPolling();
+                    
+                    // 1. 如果返回体 data 里包含 url (通常带有 refresh_token 或 SESSDATA 凭证)
+                    if (data.has("url") && !data.get("url").getAsString().isEmpty()) {
+                        String redirectUrl = data.get("url").getAsString();
+                        // 访问一次跳转 URL 以便获取最终的完整 Cookie
+                        OkHttp.string(redirectUrl, getHeader());
+                    }
+
+                    // 2. 从系统默认 CookieManager 获取刚才请求写入的 Cookie
+                    java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
+                    if (cookieManager != null) {
+                        List<java.net.HttpCookie> cookies = cookieManager.getCookieStore().get(java.net.URI.create("https://bilibili.com"));
+                        StringBuilder sb = new StringBuilder();
+                        for (java.net.HttpCookie ck : cookies) {
+                            sb.append(ck.getName()).append("=").append(ck.getValue()).append("; ");
+                        }
+                        if (sb.length() > 0) {
+                            cookie = sb.toString().trim();
+                            Path.write(getCache(), cookie);
+                        }
+                    }
+
+                    // 重新校验登录状态
+                    checkLogin();
+
+                    if (mContext instanceof Activity) {
+                        ((Activity) mContext).runOnUiThread(() -> {
+                            if (qrDialog != null && qrDialog.isShowing()) {
+                                qrDialog.dismiss();
+                            }
+                            Toast.makeText(mContext, "B站扫码登录成功！Cookie 已保存", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                } else if (code == 86038) { // 二维码失效
+                    stopPolling();
+                    if (mContext instanceof Activity) {
+                        ((Activity) mContext).runOnUiThread(() -> {
+                            if (qrDialog != null && qrDialog.isShowing()) qrDialog.dismiss();
+                            Toast.makeText(mContext, "二维码已失效，请重新点击扫码", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Poll Exception] " + e.getMessage());
+            }
+        }, 0, 2, TimeUnit.SECONDS);
+    }
+
+    private void stopPolling() {
+        if (pollScheduler != null && !pollScheduler.isShutdown()) {
+            pollScheduler.shutdownNow();
+            pollScheduler = null;
+        }
+    }
+
+    // ====================== 分类与业务逻辑 ======================
+
     @Override
     public String homeContent(boolean filter) throws Exception {
         if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
@@ -123,21 +362,17 @@ public class Bili extends Spider {
 
                             com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
 
-                            // 1. 严格拼接 bvid@aid 确保首页视频点击能正常进入详情页
                             String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                             String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
                             String vodId = bvid + "@" + aid;
 
-                            // 2. 提取标题
                             String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
 
-                            // 3. 图片路径补全协议头
                             String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
                             if (pic.startsWith("//")) {
                                 pic = "https:" + pic;
                             }
 
-                            // 4. 提取时长（popular 接口的 duration 是秒数整型，转为 mm:ss 显示更美观）
                             String durationStr = "";
                             if (itemObj.has("duration")) {
                                 try {
@@ -148,7 +383,6 @@ public class Bili extends Spider {
                                 }
                             }
 
-                            // 装配序列化 JSON
                             vodJson.addProperty("vod_id", vodId);
                             vodJson.addProperty("vod_name", title);
                             vodJson.addProperty("vod_pic", pic);
@@ -166,12 +400,18 @@ public class Bili extends Spider {
             }
         }
 
-        SpiderDebug.log("TVBox homeVideoContent=" + Result.string(list));
         return Result.string(list);
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
+        if ("peizhi".equals(tid)) {
+            Init.run(this::showPeizhiDialog);
+            return Result.string(new ArrayList<>());
+        }
+
+        // 2. 如果是 UP 主空间视频
         if (tid.endsWith("/{pg}")) {
             LinkedHashMap<String, Object> params = new LinkedHashMap<>();
             params.put("mid", tid.split("/")[0]);
@@ -198,6 +438,7 @@ public class Bili extends Spider {
             }
             return Result.string(list);
         } else {
+            // 3. 关键字/分类搜索
             String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
             String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
             if (extend != null && extend.containsKey("tid")) {
@@ -227,12 +468,10 @@ public class Bili extends Spider {
                                 if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
                                     com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
 
-                                    // 1. 严格按照 detailContent 的要求拼接 bvid@aid 解决点击空白问题
                                     String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
                                     String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
                                     String vodId = bvid + "@" + aid;
 
-                                    // 2. 精细清洗标题中的所有 HTML 标签与实体字符
                                     String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
                                     if (!title.isEmpty()) {
                                         title = title.replaceAll("<[^>]*>", "")
@@ -243,16 +482,13 @@ public class Bili extends Spider {
                                                      .replaceAll("&nbsp;", " ");
                                     }
 
-                                    // 3. 图片路径补全协议头
                                     String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
                                     if (pic.startsWith("//")) {
                                         pic = "https:" + pic;
                                     }
 
-                                    // 4. 时长备注
                                     String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
 
-                                    // 装配成符合 Vod 序列化注解的 JsonObject
                                     vodJson.addProperty("vod_id", vodId);
                                     vodJson.addProperty("vod_name", title);
                                     vodJson.addProperty("vod_pic", pic);
@@ -326,12 +562,8 @@ public class Bili extends Spider {
             }
         }
         flag.put("相关", TextUtils.join("#", episode));
-        String vod_play_from=TextUtils.join("$$$", flag.keySet());
         vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
         vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        SpiderDebug.log("TVBox VodContent=" + vod.getVodContent());
-        SpiderDebug.log("TVBox vod_play_url=" + vod.getVodPlayUrl());
-        SpiderDebug.log("TVBox VodPlayFrom=" + vod_play_from);
         return Result.string(vod);
     }
 
@@ -358,8 +590,6 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add(Proxy.getUrl() + "?do=bili" + "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd");
         }
-        SpiderDebug.log("TVBox  playerContent url" + url);
-        SpiderDebug.log("TVBox  playerContent Result:" +Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string());
         return Result.get().url(url).danmaku(Arrays.asList(Danmaku.create().name("B站").url(dan))).dash().header(getHeader()).string();
     }
 
@@ -430,28 +660,5 @@ public class Bili extends Spider {
 
     private static String getMpd(Dash dash, String videoList, String audioList) {
         return String.format(Locale.getDefault(), "<MPD xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xsi:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" type=\"static\" mediaPresentationDuration=\"PT%sS\" minBufferTime=\"PT%sS\" profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">\n" + "<Period duration=\"PT%sS\" start=\"PT0S\">\n" + "%s\n" + "%s\n" + "</Period>\n" + "</MPD>", dash.getDuration(), dash.getMinBufferTime(), dash.getDuration(), videoList, audioList);
-    }
-
-    private void checkLogin() {
-        try {
-            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
-            if (json != null && !json.isEmpty()) {
-                Resp resp = Resp.objectFrom(json);
-                if (resp != null && resp.getData() != null) {
-                    Data data = resp.getData();
-                    login = data.isLogin();
-                    isVip = data.isVip();
-                    wbi = data.getWbi();
-                    if (login) {
-                        SpiderDebug.log("===[Bili Status] 已登录成功");
-                    }
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Check Login Exception] " + e.getMessage());
-        }
-        login = false;
-        isVip = false;
     }
 }
