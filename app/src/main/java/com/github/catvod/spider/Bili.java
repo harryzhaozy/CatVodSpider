@@ -80,12 +80,25 @@ public class Bili extends Spider {
     }
 
     private void setCookie() {
-        if (extend != null && extend.has("cookie")) {
-            cookie = extend.get("cookie").getAsString();
+        // 1. 优先读取本地扫码保存的缓存凭证
+        cookie = Path.read(getCache());
+        // 2. 如果本地缓存不存在，才去读 extend 配置
+        if (TextUtils.isEmpty(cookie)) {
+            if (extend != null && extend.has("cookie")) {
+                cookie = extend.get("cookie").getAsString();
+            }
         }
-        if (cookie != null && cookie.startsWith("http")) cookie = OkHttp.string(cookie).trim();
-        if (TextUtils.isEmpty(cookie)) cookie = Path.read(getCache());
-        if (TextUtils.isEmpty(cookie)) cookie = COOKIE;
+
+        // 3. 处理 URL 类型的 Cookie 链接
+        if (cookie != null && cookie.startsWith("http")) {
+            cookie = OkHttp.string(cookie).trim();
+        }
+        // 4. 最后兜底：使用默认静态 COOKIE
+        if (TextUtils.isEmpty(cookie)) {
+            cookie = COOKIE;
+        }
+    
+        SpiderDebug.log("===[Bili setCookie] 最终生效的 Cookie: " + cookie);
     }
 
     private List<Filter> getFilter() {
