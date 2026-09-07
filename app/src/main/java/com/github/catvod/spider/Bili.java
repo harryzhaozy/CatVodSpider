@@ -697,8 +697,7 @@ private void stopPolling() {
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
-        @Override
-public String detailContent(List<String> ids) {
+       
     try {
         // 1. 拦截占位卡片的点击事件
         if (ids != null && !ids.isEmpty() && "login_setting".equals(ids.get(0))) {
