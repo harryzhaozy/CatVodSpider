@@ -175,26 +175,46 @@ public class Bili extends Spider {
     // ====================== 登录配置与扫码界面控制 ======================
 
    private void showPeizhiDialog() {
-        Activity activity = null;
+    Activity activity = null;
+    try {
+        activity = Init.getActivity();
+    } catch (Exception ignored) {
+    }
+    
+    if (activity == null && mContext instanceof Activity) {
+        activity = (Activity) mContext;
+    }
+
+    if (activity == null) {
+        SpiderDebug.log("===[Bili Error] 无法获取 Activity，无法弹出登录配置窗口");
+        return;
+    }
+
+    Activity finalActivity = activity;
+
+    // 1. 【核心】先在当前线程快速装载本地持久化 Cookie
+    setCookie();
+    
+    // 2. 本地快速预判：只要含有 SESSDATA，先置位为 true，避免网络阻塞 UI
+    if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
+        this.login = true;
+    }
+
+    // 3. 开启子线程去跑 checkLogin() 网络 API 校验，彻底解决 NetworkOnMainThreadException
+    new Thread(() -> {
         try {
-            activity = Init.getActivity();
-        } catch (Exception ignored) {
-        }
-        
-        if (activity == null && mContext instanceof Activity) {
-            activity = (Activity) mContext;
+            checkLogin(); // 子线程中安心跑 HTTP 网络校验，不引发系统拦截
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili CheckLogin Async Error] " + e.getMessage());
         }
 
-        if (activity == null) {
-            SpiderDebug.log("===[Bili Error] 无法获取 Activity，无法弹出登录配置窗口");
-            return;
-        }
-
-        Activity finalActivity = activity;
+        // 4. 网络校验完成后，切回 UI 主线程弹窗展示
         finalActivity.runOnUiThread(() -> {
             try {
-                checkLogin();
-                String statusTip = login ? "当前状态：已登录" : "当前状态：未登录 / Cookie 已失效";
+                // 如果 Activity 已经销毁，不再弹窗
+                if (finalActivity.isFinishing() || finalActivity.isDestroyed()) return;
+
+                String statusTip = login ? "当前状态：B站已登录" : "当前状态：未登录 / Cookie 已失效";
 
                 AlertDialog.Builder builder = new AlertDialog.Builder(finalActivity);
                 builder.setTitle("Bilibili 账号配置");
@@ -210,32 +230,31 @@ public class Bili extends Spider {
                 builder.setNegativeButton("清除 Cookie", (dialog, which) -> {
                     clearCookie();
                     dialog.dismiss();
+                    Toast.makeText(finalActivity, "Cookie 已清除", Toast.LENGTH_SHORT).show();
                 });
 
                 builder.setNeutralButton("取消", (dialog, which) -> dialog.dismiss());
                 builder.create().show();
+
             } catch (Exception e) {
-                SpiderDebug.log("===[Bili Dialog Exception] " + e.getMessage());
+                SpiderDebug.log("===[Bili Dialog UI Exception] " + e.getMessage());
             }
         });
-    }
-
+    }).start();
+}
     private void clearCookie() {
-        try {
-            cookie = COOKIE; // 恢复为默认无登录 Cookie
-            File file = getCache();
-            if (file.exists()) {
-                file.delete();
-            }
-            login = false;
-            isVip = false;
-            if (mContext != null) {
-                Init.run(() -> Toast.makeText(mContext, "Cookie 已清除！", Toast.LENGTH_SHORT).show());
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("===[Bili Clear Cookie Error] " + e.getMessage());
-        }
+    this.cookie = "";
+    this.login = false;
+    this.isVip = false;
+    try {
+        
+        //  清空 Path 文件缓存
+        Path.write(getCache(), "");
+        SpiderDebug.log("===[Bili Clear Cookie] 本地凭证已彻底清空");
+    } catch (Exception e) {
+        SpiderDebug.log("===[Bili Clear Cookie Error] " + e.getMessage());
     }
+}
 
    private void startQrCodeLogin() {
         // 在后台线程发起网络请求和二维码绘制，避免 NetworkOnMainThreadException
