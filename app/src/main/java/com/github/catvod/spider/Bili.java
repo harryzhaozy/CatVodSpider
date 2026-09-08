@@ -572,6 +572,99 @@ private void stopPolling() {
         return Result.string(list);
     }
 
+
+    /**
+ * 缺失方法 1：解析 B 站搜索结果中的总页数
+ */
+private int parseTotalPage(String json) {
+    try {
+        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+            
+            // 优先读取 numPages
+            if (data.has("numPages") && !data.get("numPages").isJsonNull()) {
+                int numPages = data.get("numPages").getAsInt();
+                if (numPages > 0) return Math.min(numPages, 50);
+            }
+            
+            // 备用：根据 total 向上取整计算页数
+            if (data.has("total") && !data.get("total").isJsonNull()) {
+                int total = data.get("total").getAsInt();
+                int pageSize = data.has("pagesize") ? data.get("pagesize").getAsInt() : 20;
+                if (total > 0 && pageSize > 0) {
+                    int calcPages = (total + pageSize - 1) / pageSize;
+                    return Math.min(calcPages, 50);
+                }
+            }
+        }
+    } catch (Exception e) {
+        com.github.catvod.crawler.SpiderDebug.log("parseTotalPage Error: " + e.getMessage());
+    }
+    return 1;
+}
+
+/**
+ * 缺失方法 2：解析 B 站搜索 API 返回的视频列表 JSON
+ */
+private List<Vod> parseSearchJson(String json) {
+    List<Vod> list = new ArrayList<>();
+    try {
+        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        if (!jsonObject.has("data") || jsonObject.get("data").isJsonNull()) {
+            return list;
+        }
+
+        com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+        if (!data.has("result") || data.get("result").isJsonNull()) {
+            return list;
+        }
+
+        com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
+        for (com.google.gson.JsonElement element : resultArray) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject item = element.getAsJsonObject();
+
+            // 过滤非视频类型的搜索项 (如 user, live, article 等)
+            if (item.has("type") && !"video".equals(item.get("type").getAsString())) {
+                continue;
+            }
+
+            String bvid = item.has("bvid") ? item.get("bvid").getAsString() : "";
+            if (bvid.isEmpty() && item.has("aid")) {
+                bvid = "AV" + item.get("aid").getAsString();
+            }
+
+            String title = item.has("title") ? item.get("title").getAsString() : "";
+            // 清理 B 站搜索标题里的 HTML 高亮标签 <em class="keyword">...</em>
+            title = title.replaceAll("<[^>]+>", "");
+
+            String pic = item.has("pic") ? item.get("pic").getAsString() : "";
+            if (pic.startsWith("//")) {
+                pic = "https:" + pic;
+            }
+
+            String remark = item.has("duration") ? item.get("duration").getAsString() : "";
+            if (item.has("author")) {
+                remark = item.get("author").getAsString() + (remark.isEmpty() ? "" : " | " + remark);
+            }
+
+            if (!bvid.isEmpty() && !title.isEmpty()) {
+                Vod vod = new Vod();
+                vod.setVodId(bvid);
+                vod.setVodName(title);
+                vod.setVodPic(pic);
+                vod.setVodRemarks(remark);
+                list.add(vod);
+            }
+        }
+    } catch (Exception e) {
+        com.github.catvod.crawler.SpiderDebug.log("parseSearchJson Error: " + e.getMessage());
+    }
+    return list;
+}
+    
+    
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
