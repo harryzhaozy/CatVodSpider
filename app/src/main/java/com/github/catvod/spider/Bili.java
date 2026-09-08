@@ -496,19 +496,90 @@ private void stopPolling() {
     // ====================== 分类与业务逻辑 ======================
 
     @Override
-    public String homeContent(boolean filter) throws Exception {
-        if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
-        List<Class> classes = new ArrayList<>();
-        LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
-        if (extend != null && extend.has("type")) {
-            String[] types = extend.get("type").getAsString().split("#");
-            for (String type : types) {
-                classes.add(new Class(type));
+public String homeContent(boolean filter) throws Exception {
+    List<Class> classes = new ArrayList<>();
+    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
+
+    // 1. 如果配置了 "json" 
+    if (extend != null && extend.has("json")) {
+        String jsonPath = extend.get("json").getAsString();
+        String jsonStr = "";
+
+        if (jsonPath.startsWith("http")) {
+            jsonStr = OkHttp.string(jsonPath, getHeader());
+        } else {
+            jsonStr = com.github.catvod.spider.Init.getExt(jsonPath);
+        }
+
+        if (!TextUtils.isEmpty(jsonStr)) {
+            try {
+                com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(jsonStr).getAsJsonObject();
+                if (jsonObject.has("class") && jsonObject.get("class").isJsonArray()) {
+                    com.google.gson.JsonArray classArray = jsonObject.getAsJsonArray("class");
+
+                    for (com.google.gson.JsonElement element : classArray) {
+                        if (!element.isJsonObject()) continue;
+                        com.google.gson.JsonObject item = element.getAsJsonObject();
+
+                        String typeId = item.has("type_id") ? item.get("type_id").getAsString() : "";
+                        String typeName = item.has("type_name") ? item.get("type_name").getAsString() : "";
+
+                        Class cls = new Class();
+                        cls.setTypeId(typeId);
+                        cls.setTypeName(typeName);
+                        classes.add(cls);
+
+                        // 💡 关键拦截：如果是“登录配置”分类，挂载弹窗 Filter 按钮；否则挂载默认 Filter
+                        if ("peizhi".equals(typeId) || "login_setting".equals(typeId)) {
+                            List<Filter> peizhiFilters = new ArrayList<>();
+                            Filter f = new Filter();
+                            f.setKey("action");
+                            f.setName("账号配置");
+
+                            List<Filter.Value> values = new ArrayList<>();
+                            values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
+                            f.setValue(values);
+
+                            peizhiFilters.add(f);
+                            filters.put(typeId, peizhiFilters);
+                        } else {
+                            filters.put(typeId, getFilter());
+                        }
+                    }
+
+                    return Result.string(classes, filters);
+                }
+            } catch (Exception e) {
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Home Parse Error] " + e.getMessage());
+            }
+        }
+    }
+
+    // 2. 兼容用 "type" 拼接分类的备用逻辑
+    if (extend != null && extend.has("type")) {
+        String[] types = extend.get("type").getAsString().split("#");
+        for (String type : types) {
+            classes.add(new Class(type));
+            if ("peizhi".equals(type) || "login_setting".equals(type)) {
+                List<Filter> peizhiFilters = new ArrayList<>();
+                Filter f = new Filter();
+                f.setKey("action");
+                f.setName("账号配置");
+                List<Filter.Value> values = new ArrayList<>();
+                values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
+                f.setValue(values);
+                peizhiFilters.add(f);
+                filters.put(type, peizhiFilters);
+            } else {
                 filters.put(type, getFilter());
             }
         }
-        return Result.string(classes, filters);
     }
+
+    return Result.string(classes, filters);
+}
+
+
 
     @Override
     public String homeVideoContent() {
@@ -575,19 +646,29 @@ private void stopPolling() {
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
-        if ("peizhi".equals(tid)) {
-            //Init.run(this::showPeizhiDialog);
-            //Result result = new Result();
-            //List<Vod> list = new ArrayList<>();
-            // 构建一个占位卡片提示用户（可选，防止部分 TV 壳子展示空白页报错）
-            //Vod vod = new Vod();
-            //vod.setVodId("login_setting");
-            //vod.setVodName("Click to Configure / 点击配置账号");
-            //vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
-            //vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
-            //list.add(vod);
-            //return Result.string(list);
-            try {
+        if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
+
+        // 1. 捕获 Filter 按钮点击：直接在当前页面弹窗，绝对无背景跳转
+        if (extend != null && "action_dialog".equals(extend.get("action"))) {
+            SpiderDebug.log("===[Bili Category] 捕获到 Filter 账号配置操作，直接弹窗");
+            Init.run(this::showPeizhiDialog);
+        }
+
+        // 2. 限制分页请求，防止多卡片
+        if (pg != null && !pg.equals("1") && !pg.isEmpty()) {
+            return Result.string(new ArrayList<>());
+        }
+
+        // 3. 实时刷新 Cookie 与内存登录标志
+        setCookie();
+        if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
+            this.login = true;
+        } else {
+            this.login = false;
+        }
+
+        // 4. 构建当前分类页面中央的静态提示卡片
+        try {
             org.json.JSONObject json = new org.json.JSONObject();
             json.put("page", 1);
             json.put("pagecount", 1);
@@ -596,19 +677,21 @@ private void stopPolling() {
 
             org.json.JSONArray array = new org.json.JSONArray();
             org.json.JSONObject vodObj = new org.json.JSONObject();
-            vodObj.put("vod_id", "login_setting");
-            vodObj.put("vod_name", "【点击配置 Bilibili 账号】");
-            vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
-            vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录 / 点击登录");
+            vodObj.put("vod_id", "notice_card");
+            vodObj.put("vod_name", "【提示】请点击上方「账号配置」按钮弹出登录框");
+            vodObj.put("vod_pic", "https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            
+            // 实时展示登录状态角标
+            vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录");
+            
             array.put(vodObj);
-
             json.put("list", array);
+            
             return json.toString();
         } catch (Exception e) {
-            SpiderDebug.log("===[Bili Category Json Error] " + e.getMessage());
             return Result.string(new ArrayList<>());
         }
-        }
+    }
 
         // 2. 如果是 UP 主空间视频
         if (tid.endsWith("/{pg}")) {
