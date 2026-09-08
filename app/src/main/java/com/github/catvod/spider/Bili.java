@@ -508,34 +508,10 @@ public String homeContent(boolean filter) throws Exception {
         // 网络链接直接请求
         jsonStr = OkHttp.string(jsonPath, getHeader());
     } else {
-        // 本地相对路径转换：把 ./ 替换为 TVBox 的本地缓存/配置根路径
-        try {
-            // 处理路径中的 ./
-            if (jsonPath.startsWith("./")) {
-                jsonPath = jsonPath.substring(2);
-            }
-            
-            // 拼接 TVBox 的标准配置/存储路径（优先尝试 Init.path，其次尝试应用根目录）
-            java.io.File file = new java.io.File(jsonPath);
-            if (!file.isAbsolute()) {
-                // 如果是相对路径，从 Android 外置存储/TVBox 存储根目录寻找
-                file = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "tvbox/" + jsonPath);
-                if (!file.exists()) {
-                    file = new java.io.File(mContext.getFilesDir(), jsonPath);
-                }
-            }
-
-            SpiderDebug.log("===[Bili] 尝试读取 json 路径: " + file.getAbsolutePath());
-
-            if (file.exists() && file.isFile()) {
-                byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
-                jsonStr = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-                SpiderDebug.log("===[Bili] 读取 json 成功，长度: " + jsonStr.length());
-            } else {
-                SpiderDebug.log("===[Bili] json 文件不存在！");
-            }
-        } catch (Throwable t) {
-            SpiderDebug.log("===[Bili Read Local Json Fail] " + t.getMessage());
+        java.io.File file = new java.io.File(jsonPath.replace("./", ""));
+        if (file.exists()) {
+            jsonStr = com.github.catvod.utils.Util.fs(file); 
+            SpiderDebug.log("===[Bili] 读取 json 成功"++ jsonStr);
         }
     }
 
