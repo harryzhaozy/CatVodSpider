@@ -657,16 +657,77 @@ private void stopPolling() {
             return Result.string(new ArrayList<>());
         }
     }
-            String order = extend.containsKey("order") ? extend.get("order") : "totalrank";
-            String duration = extend.containsKey("duration") ? extend.get("duration") : "0";
-            if (extend.containsKey("tid")) tid = tid + " " + extend.get("tid");
-            String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" + URLEncoder.encode(tid) + "&order=" + order + "&duration=" + duration + "&page=" + pg;
-           
+            
+            String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
+            String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
+            if (extend != null && extend.containsKey("tid")) {
+                tid = tid + " " + extend.get("tid");
+            }
+
+            String encodedTid = URLEncoder.encode(tid, "UTF-8");
+            String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" 
+                       + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
+
             String json = OkHttp.string(api, getHeader());
-            Resp resp = Resp.objectFrom(json);
             List<Vod> list = new ArrayList<>();
-            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) list.add(item.getVod());
+
+            if (json != null && !json.trim().isEmpty()) {
+                try {
+                    com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                    if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+                        com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+                        if (data.has("result") && data.get("result").isJsonArray()) {
+                            com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
+                            com.google.gson.Gson gson = new com.google.gson.Gson();
+
+                            for (com.google.gson.JsonElement element : resultArray) {
+                                if (!element.isJsonObject()) continue;
+                                com.google.gson.JsonObject itemObj = element.getAsJsonObject();
+
+                                if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                                    com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
+
+                                    String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
+                                    String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
+                                    String vodId = bvid + "@" + aid;
+
+                                    String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+                                    if (!title.isEmpty()) {
+                                        title = title.replaceAll("<[^>]*>", "")
+                                                     .replaceAll("&quot;", "\"")
+                                                     .replaceAll("&amp;", "&")
+                                                     .replaceAll("&lt;", "<")
+                                                     .replaceAll("&gt;", ">")
+                                                     .replaceAll("&nbsp;", " ");
+                                    }
+
+                                    String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
+                                    if (pic.startsWith("//")) {
+                                        pic = "https:" + pic;
+                                    }
+
+                                    String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
+
+                                    vodJson.addProperty("vod_id", vodId);
+                                    vodJson.addProperty("vod_name", title);
+                                    vodJson.addProperty("vod_pic", pic);
+                                    vodJson.addProperty("vod_remarks", durationStr);
+
+                                    Vod vod = gson.fromJson(vodJson, Vod.class);
+                                    if (vod != null) {
+                                        list.add(vod);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable t) {
+                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Error] " + t.getMessage());
+                }
+            }
+
             return Result.string(list);
+        
 
         
     }
