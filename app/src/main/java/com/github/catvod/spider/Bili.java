@@ -790,26 +790,7 @@ public String homeContent(boolean filter) throws Exception {
     @Override
     public String detailContent(List<String> ids) throws Exception {
        
-    try {
-        // 1. 拦截占位卡片的点击事件
-        if (ids != null && !ids.isEmpty() && "login_setting".equals(ids.get(0))) {
-            SpiderDebug.log("===[Bili Detail] 用户点击了登录配置卡片，准备弹出配置窗口");
-            
-            // 在主线程触发配置弹窗
-            Init.run(this::showPeizhiDialog);
-
-            try {
-                org.json.JSONObject json = new org.json.JSONObject();
-                json.put("list", new org.json.JSONArray());
-                return json.toString();
-            } catch (Exception e) {
-                return Result.string(new ArrayList<>());
-            }
-        }
-    } catch (Exception e) {
-        SpiderDebug.log("===[Bili Detail Error] " + e.getMessage());
-    }
-        //正常处理
+    
         if (!login) checkLogin();
 
         String[] split = ids.get(0).split("@");
