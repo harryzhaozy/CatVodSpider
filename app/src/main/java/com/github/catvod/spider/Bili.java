@@ -497,74 +497,53 @@ private void stopPolling() {
 
 @Override
 public String homeContent(boolean filter) throws Exception {
-    List<Class> classes = new ArrayList<>();
-    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
-
-    // 1. 如果配置了 "json" 路径
+    // 1. 处理 "json" 路径：直接利用 TVBox 转换好的 URL 请求内容
     if (extend != null && extend.has("json")) {
-    String jsonPath = extend.get("json").getAsString();
-    String jsonStr = "";
-
-    if (jsonPath.startsWith("http")) {
-        // 1. 如果是远程网络链接，直接请求
-        jsonStr = OkHttp.string(jsonPath, getHeader());
-    } else {
-        // 2. 如果是相对路径 ，通过 CatVod 框架的 Path 工具类获取真实本地 File
-        try {
-            java.io.File file = com.github.catvod.utils.Path.local(jsonPath);
-            SpiderDebug.log("===[Bili] 转换后的绝对路径: " + (file != null ? file.getAbsolutePath() : "null"));
-
-            if (file != null && file.exists() && file.isFile()) {
-                byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
-                jsonStr = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-                SpiderDebug.log("===[Bili] 读取相对路径 json 成功！");
-            }
-        } catch (Throwable t) {
-            SpiderDebug.log("===[Bili Read Local Path Fail] " + t.getMessage());
-        }
-    }
-
+        String jsonStr = OkHttp.string(extend.get("json").getAsString());
         if (!TextUtils.isEmpty(jsonStr)) {
             try {
-                com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(jsonStr).getAsJsonObject();
+                JsonObject jsonObject = JsonParser.parseString(jsonStr).getAsJsonObject();
                 if (jsonObject.has("class") && jsonObject.get("class").isJsonArray()) {
-                    com.google.gson.JsonArray classArray = jsonObject.getAsJsonArray("class");
+                    List<Class> classes = new ArrayList<>();
+                    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
+                    JsonArray classArray = jsonObject.getAsJsonArray("class");
 
-                    for (com.google.gson.JsonElement element : classArray) {
+                    for (JsonElement element : classArray) {
                         if (!element.isJsonObject()) continue;
-                        com.google.gson.JsonObject item = element.getAsJsonObject();
+                        JsonObject item = element.getAsJsonObject();
 
                         String typeId = item.has("type_id") ? item.get("type_id").getAsString() : "";
                         String typeName = item.has("type_name") ? item.get("type_name").getAsString() : "";
 
-                        // 使用有参构造函数实例化 Class(typeId, typeName)
                         classes.add(new Class(typeId, typeName));
 
-                        // 💡 关键拦截：如果是“登录配置”分类，挂载弹窗 Filter 按钮
+                        // 💡 关键操作：遇到登录配置分类，注入弹窗 Filter 按钮
                         if ("peizhi".equals(typeId) || "login_setting".equals(typeId)) {
                             List<Filter.Value> values = new ArrayList<>();
                             values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
 
-                            // 使用有参构造函数实例化 Filter(key, name, values)
-                            Filter f = new Filter("action", "账号配置", values);
-
                             List<Filter> peizhiFilters = new ArrayList<>();
-                            peizhiFilters.add(f);
+                            peizhiFilters.add(new Filter("action", "账号配置", values));
                             filters.put(typeId, peizhiFilters);
                         } else {
                             filters.put(typeId, getFilter());
                         }
                     }
 
+                    // 返回重新组装好（挂载了弹窗按钮）的分类数据
                     return Result.string(classes, filters);
                 }
             } catch (Exception e) {
-                com.github.catvod.crawler.SpiderDebug.log("===[Bili Home Parse Error] " + e.getMessage());
+                SpiderDebug.log("===[Bili Parse Json Error] " + e.getMessage());
             }
+            // 如果解析失败，回退直接返回原 JSON 字符串
+            return jsonStr;
         }
     }
 
-    // 2. 兼容用 "type" 拼接分类的旧逻辑
+    // 2. 兼容原版 "type" 拼接分类逻辑
+    List<Class> classes = new ArrayList<>();
+    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
     if (extend != null && extend.has("type")) {
         String[] types = extend.get("type").getAsString().split("#");
         for (String type : types) {
@@ -572,12 +551,8 @@ public String homeContent(boolean filter) throws Exception {
             if ("peizhi".equals(type) || "login_setting".equals(type)) {
                 List<Filter.Value> values = new ArrayList<>();
                 values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
-
-                // 使用有参构造函数实例化 Filter(key, name, values)
-                Filter f = new Filter("action", "账号配置", values);
-
                 List<Filter> peizhiFilters = new ArrayList<>();
-                peizhiFilters.add(f);
+                peizhiFilters.add(new Filter("action", "账号配置", values));
                 filters.put(type, peizhiFilters);
             } else {
                 filters.put(type, getFilter());
