@@ -771,7 +771,7 @@ private List<Vod> parseSearchJson(String json) {
     int totalPage = 1;
 
     // --- 第一次请求：拉取 biliPage1 ---
-    String api1 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
+    String api1 = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" 
                + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage1;
 
     String json1 = OkHttp.string(api1, getHeader());
