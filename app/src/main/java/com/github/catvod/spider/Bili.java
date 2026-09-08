@@ -579,20 +579,13 @@ private void stopPolling() {
 public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
     // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi 或 login_setting)
     if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
-        // 限制分页请求，防止重复出现提示卡片
-        if (pg != null && !pg.equals("1") && !pg.isEmpty()) {
+        if (pg != null && !pg.trim().equals("1") && !pg.isEmpty()) {
             return Result.string(new ArrayList<>());
         }
 
-        // 实时刷新 Cookie 与内存登录标志
         setCookie();
-        if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
-            this.login = true;
-        } else {
-            this.login = false;
-        }
+        this.login = !TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA");
 
-        // 构建当前分类页面中央的静态提示卡片
         try {
             org.json.JSONObject json = new org.json.JSONObject();
             json.put("page", 1);
@@ -605,8 +598,6 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
             vodObj.put("vod_id", "notice_card");
             vodObj.put("vod_name", "【提示】请点击上方「账号配置」按钮弹出登录框");
             vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
-            
-            // 实时展示登录状态角标
             vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录");
             
             array.put(vodObj);
@@ -618,7 +609,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
     }
 
-    // 2. 如果是 UP 主空间视频
+    // 2. UP 主空间视频
     if (tid.endsWith("/{pg}")) {
         LinkedHashMap<String, Object> params = new LinkedHashMap<>();
         params.put("mid", tid.split("/")[0]);
@@ -645,15 +636,15 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
         return Result.string(list);
     } else {
-        // 3. 关键字/分类搜索 (针对 B 站翻页机制优化)
+        // 3. 关键字/分类搜索
         int currentPage = 1;
-        try {
-            currentPage = Integer.parseInt(pg);
-        } catch (Exception ignored) {}
+        if (pg != null) {
+            try {
+                currentPage = Integer.parseInt(pg.trim());
+            } catch (Exception ignored) {}
+        }
 
-        // 计算对应的 B 站真实页码：
-        // 因为当 pg=1 时把 B 站的 page=1 和 page=2 都一次性请求并合并了，
-        // 所以当 TVBox 后续请求 pg=2 时，映射去拿 B 站的 page=3，避免重复数据。
+        // 页码映射：pg=1 请求 B 站 page=1，pg=2 请求 B 站 page=3
         int biliPage = (currentPage == 1) ? 1 : currentPage + 1;
 
         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
@@ -664,7 +655,7 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
 
         String encodedTid = URLEncoder.encode(tid, "UTF-8");
         
-        // --- 请求第 1 次 (B 站对应页码 biliPage) ---
+        // --- 请求 1：当前页 (B站 page=biliPage) ---
         String api1 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                    + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage;
 
@@ -674,26 +665,32 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
 
         if (json1 != null && !json1.trim().isEmpty()) {
             totalPage = parseTotalPage(json1);
-            totalList.addAll(parseSearchJson(json1));
+            List<Vod> page1List = parseSearchJson(json1);
+            totalList.addAll(page1List);
 
-            // --- 核心改动：当 TVBox 处于第 1 页且 B 站总页数 >= 2 时，追加请求 B 站的第 2 页 ---
-            if (currentPage == 1 && totalPage >= 2) {
-                try { Thread.sleep(50); } catch (Exception ignored) {} // 短暂延时防风控
+            // 💡【核心逻辑修复】
+            // 只要处于第 1 页，且（解析出了 totalPage >= 2 或者 第1页数据条数达到满页 20 条），就强制发送第 2 次请求
+            if (currentPage == 1 && (totalPage >= 2 || page1List.size() >= 20)) {
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Search] 触发第 2 次请求，正在拉取 B 站 page=2");
+                try { Thread.sleep(100); } catch (Exception ignored) {}
 
                 String api2 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
                            + encodedTid + "&order=" + order + "&duration=" + duration + "&page=2";
+                
                 String json2 = OkHttp.string(api2, getHeader());
                 if (json2 != null && !json2.trim().isEmpty()) {
-                    totalList.addAll(parseSearchJson(json2));
+                    List<Vod> page2List = parseSearchJson(json2);
+                    totalList.addAll(page2List);
+                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Search] 第 2 次请求成功，合并追加了 " + page2List.size() + " 条数据");
                 }
             }
         }
 
-        // 封装包含准确 pagecount 的 JSON 回传给 TVBox 客户端
+        // 封装返回
         try {
             org.json.JSONObject resultJson = new org.json.JSONObject();
             resultJson.put("page", currentPage);
-            resultJson.put("pagecount", totalPage); // 告知 TVBox B站真实的总页数
+            resultJson.put("pagecount", totalPage);
             resultJson.put("limit", 20);
 
             org.json.JSONArray jsonArray = new org.json.JSONArray();
@@ -708,6 +705,37 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
             return Result.string(totalList);
         }
     }
+}
+
+/**
+ * 优化后的总页数解析：多重备用机制提取 numPages
+ */
+private int parseTotalPage(String json) {
+    try {
+        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+            
+            // 1. 直接获取 numPages
+            if (data.has("numPages")) {
+                int numPages = data.get("numPages").getAsInt();
+                if (numPages > 0) return Math.min(numPages, 50);
+            }
+            
+            // 2. 备用方式：用 total 和 pagesize/ps 向上取整计算
+            if (data.has("total")) {
+                int total = data.get("total").getAsInt();
+                int pageSize = data.has("pagesize") ? data.get("pagesize").getAsInt() : 20;
+                if (total > 0 && pageSize > 0) {
+                    int calcPages = (total + pageSize - 1) / pageSize;
+                    return Math.min(calcPages, 50);
+                }
+            }
+        }
+    } catch (Exception e) {
+        com.github.catvod.crawler.SpiderDebug.log("===[Bili Parse TotalPage Error] " + e.getMessage());
+    }
+    return 1;
 }
 
 /**
@@ -770,22 +798,7 @@ private List<Vod> parseSearchJson(String json) {
     return list;
 }
 
-/**
- * 辅助方法：解析 B 站搜索接口 JSON 里的总页数 (numPages)
- */
-private int parseTotalPage(String json) {
-    try {
-        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-            if (data.has("numPages")) {
-                int totalPage = data.get("numPages").getAsInt();
-                return Math.min(totalPage, 50); // B 站 Web 端上限通常为 50 页
-            }
-        }
-    } catch (Exception ignored) {}
-    return 1;
-}
+
 
 @Override
 public String detailContent(List<String> ids) throws Exception {
