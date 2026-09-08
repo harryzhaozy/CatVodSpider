@@ -495,20 +495,18 @@ private void stopPolling() {
 
     // ====================== 分类与业务逻辑 ======================
 
-    @Override
+@Override
 public String homeContent(boolean filter) throws Exception {
     List<Class> classes = new ArrayList<>();
     LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
-    // 1. 如果配置了 "json" 
+    // 1. 如果配置了 "json" 路径 (如 http 链接或在线配置)
     if (extend != null && extend.has("json")) {
         String jsonPath = extend.get("json").getAsString();
         String jsonStr = "";
 
         if (jsonPath.startsWith("http")) {
             jsonStr = OkHttp.string(jsonPath, getHeader());
-        } else {
-            jsonStr = com.github.catvod.spider.Init.getExt(jsonPath);
         }
 
         if (!TextUtils.isEmpty(jsonStr)) {
@@ -524,22 +522,18 @@ public String homeContent(boolean filter) throws Exception {
                         String typeId = item.has("type_id") ? item.get("type_id").getAsString() : "";
                         String typeName = item.has("type_name") ? item.get("type_name").getAsString() : "";
 
-                        Class cls = new Class();
-                        cls.setTypeId(typeId);
-                        cls.setTypeName(typeName);
-                        classes.add(cls);
+                        // 使用有参构造函数实例化 Class(typeId, typeName)
+                        classes.add(new Class(typeId, typeName));
 
-                        // 💡 关键拦截：如果是“登录配置”分类，挂载弹窗 Filter 按钮；否则挂载默认 Filter
+                        // 💡 关键拦截：如果是“登录配置”分类，挂载弹窗 Filter 按钮
                         if ("peizhi".equals(typeId) || "login_setting".equals(typeId)) {
-                            List<Filter> peizhiFilters = new ArrayList<>();
-                            Filter f = new Filter();
-                            f.setKey("action");
-                            f.setName("账号配置");
-
                             List<Filter.Value> values = new ArrayList<>();
                             values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
-                            f.setValue(values);
 
+                            // 使用有参构造函数实例化 Filter(key, name, values)
+                            Filter f = new Filter("action", "账号配置", values);
+
+                            List<Filter> peizhiFilters = new ArrayList<>();
                             peizhiFilters.add(f);
                             filters.put(typeId, peizhiFilters);
                         } else {
@@ -555,19 +549,19 @@ public String homeContent(boolean filter) throws Exception {
         }
     }
 
-    // 2. 兼容用 "type" 拼接分类的备用逻辑
+    // 2. 兼容用 "type" 拼接分类的旧逻辑
     if (extend != null && extend.has("type")) {
         String[] types = extend.get("type").getAsString().split("#");
         for (String type : types) {
             classes.add(new Class(type));
             if ("peizhi".equals(type) || "login_setting".equals(type)) {
-                List<Filter> peizhiFilters = new ArrayList<>();
-                Filter f = new Filter();
-                f.setKey("action");
-                f.setName("账号配置");
                 List<Filter.Value> values = new ArrayList<>();
                 values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
-                f.setValue(values);
+
+                // 使用有参构造函数实例化 Filter(key, name, values)
+                Filter f = new Filter("action", "账号配置", values);
+
+                List<Filter> peizhiFilters = new ArrayList<>();
                 peizhiFilters.add(f);
                 filters.put(type, peizhiFilters);
             } else {
