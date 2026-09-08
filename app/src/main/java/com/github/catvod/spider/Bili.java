@@ -500,21 +500,26 @@ public String homeContent(boolean filter) throws Exception {
     List<Class> classes = new ArrayList<>();
     LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
-    // 1. 如果配置了 "json" 路径 (如 http 链接或在线配置)
+    // 1. 如果配置了 "json" 路径
     if (extend != null && extend.has("json")) {
-    String jsonPath = extend.get("json").getAsString();
-    String jsonStr = "";
+        String jsonPath = extend.get("json").getAsString();
+        String jsonStr = "";
 
-    if (jsonPath.startsWith("http")) {
-        jsonStr = OkHttp.string(jsonPath, getHeader());
-    } else {
-        // 尝试读取本地/扩展文件
-        try {
-            jsonStr = com.github.catvod.spider.Init.getExt(jsonPath);
-        } catch (Throwable t) {
-            SpiderDebug.log("===[Bili Read Ext Json Fail] " + t.getMessage());
+        if (jsonPath.startsWith("http")) {
+            // 网络链接
+            jsonStr = OkHttp.string(jsonPath, getHeader());
+        } else {
+            // 本地路径或相对路径，直接通过 File 读取
+            try {
+                java.io.File file = new java.io.File(jsonPath.replace("file://", ""));
+                if (file.exists() && file.isFile()) {
+                    byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+                    jsonStr = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                }
+            } catch (Throwable t) {
+                com.github.catvod.crawler.SpiderDebug.log("===[Bili Read Local Json Fail] " + t.getMessage());
+            }
         }
-    }
 
         if (!TextUtils.isEmpty(jsonStr)) {
             try {
