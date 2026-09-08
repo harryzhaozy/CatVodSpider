@@ -499,9 +499,19 @@ private void stopPolling() {
 
 @Override
 public String homeContent(boolean filter) throws Exception {
+    // 💡 调试日志 1：打印传入的 extend 全貌
+    SpiderDebug.log("===[Bili Home] extend 配置信息: " + (extend != null ? extend.toString() : "null"));
+
     // 1. 处理 "json" 路径：直接利用 TVBox 转换好的 URL 请求内容
     if (extend != null && extend.has("json")) {
-        String jsonStr = OkHttp.string(extend.get("json").getAsString());
+        String jsonPath = extend.get("json").getAsString();
+        // 💡 调试日志 2：打印从 extend 里提取出的 json 路径/URL
+        SpiderDebug.log("===[Bili Home] extend.get(\"json\") 目标路径/URL: " + jsonPath);
+
+        String jsonStr = OkHttp.string(jsonPath);
+        // 💡 调试日志 3：打印网络获取到的 jsonStr 内容
+        SpiderDebug.log("===[Bili Home] OkHttp 获取到的 jsonStr 内容: " + jsonStr);
+
         if (!TextUtils.isEmpty(jsonStr)) {
             try {
                 JsonObject jsonObject = JsonParser.parseString(jsonStr).getAsJsonObject();
@@ -521,6 +531,7 @@ public String homeContent(boolean filter) throws Exception {
 
                         // 💡 关键操作：遇到登录配置分类，注入弹窗 Filter 按钮
                         if ("peizhi".equals(typeId) || "login_setting".equals(typeId)) {
+                            SpiderDebug.log("===[Bili Home] 成功匹配到登录配置分类 typeId: " + typeId + "，开始挂载弹窗按钮");
                             List<Filter.Value> values = new ArrayList<>();
                             values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
 
@@ -532,6 +543,7 @@ public String homeContent(boolean filter) throws Exception {
                         }
                     }
 
+                    SpiderDebug.log("===[Bili Home] 分类及 Filter 重组完毕，共加载分类数: " + classes.size());
                     // 返回重新组装好（挂载了弹窗按钮）的分类数据
                     return Result.string(classes, filters);
                 }
@@ -540,6 +552,8 @@ public String homeContent(boolean filter) throws Exception {
             }
             // 如果解析失败，回退直接返回原 JSON 字符串
             return jsonStr;
+        } else {
+            SpiderDebug.log("===[Bili Home] OkHttp 获取的 jsonStr 为空！");
         }
     }
 
@@ -547,7 +561,9 @@ public String homeContent(boolean filter) throws Exception {
     List<Class> classes = new ArrayList<>();
     LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
     if (extend != null && extend.has("type")) {
-        String[] types = extend.get("type").getAsString().split("#");
+        String typeStr = extend.get("type").getAsString();
+        SpiderDebug.log("===[Bili Home] 走 type 拼接逻辑: " + typeStr);
+        String[] types = typeStr.split("#");
         for (String type : types) {
             classes.add(new Class(type));
             if ("peizhi".equals(type) || "login_setting".equals(type)) {
