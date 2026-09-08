@@ -511,7 +511,7 @@ public String homeContent(boolean filter) throws Exception {
         java.io.File file = new java.io.File(jsonPath.replace("./", ""));
         if (file.exists()) {
             jsonStr = com.github.catvod.utils.Util.fs(file); 
-            SpiderDebug.log("===[Bili] 读取 json 成功"++ jsonStr);
+            SpiderDebug.log("===[Bili] 读取 json 成功"+ jsonStr);
         }
     }
 
