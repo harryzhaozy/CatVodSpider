@@ -725,7 +725,7 @@ private void stopPolling() {
         }
     }
 
-   @Override
+@Override
 public String detailContent(List<String> ids) throws Exception {
     if (ids == null || ids.isEmpty()) {
         return Result.string(new ArrayList<>());
