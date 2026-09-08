@@ -606,98 +606,6 @@ private void stopPolling() {
 
         return Result.string(list);
     }
-
-
-    /**
- * 缺失方法 1：解析 B 站搜索结果中的总页数
- */
-private int parseTotalPage(String json) {
-    try {
-        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-            
-            // 优先读取 numPages
-            if (data.has("numPages") && !data.get("numPages").isJsonNull()) {
-                int numPages = data.get("numPages").getAsInt();
-                if (numPages > 0) return Math.min(numPages, 50);
-            }
-            
-            // 备用：根据 total 向上取整计算页数
-            if (data.has("total") && !data.get("total").isJsonNull()) {
-                int total = data.get("total").getAsInt();
-                int pageSize = data.has("pagesize") ? data.get("pagesize").getAsInt() : 20;
-                if (total > 0 && pageSize > 0) {
-                    int calcPages = (total + pageSize - 1) / pageSize;
-                    return Math.min(calcPages, 50);
-                }
-            }
-        }
-    } catch (Exception e) {
-        com.github.catvod.crawler.SpiderDebug.log("parseTotalPage Error: " + e.getMessage());
-    }
-    return 1;
-}
-
-/**
- * 缺失方法 2：解析 B 站搜索 API 返回的视频列表 JSON
- */
-private List<Vod> parseSearchJson(String json) {
-    List<Vod> list = new ArrayList<>();
-    try {
-        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        if (!jsonObject.has("data") || jsonObject.get("data").isJsonNull()) {
-            return list;
-        }
-
-        com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-        if (!data.has("result") || data.get("result").isJsonNull()) {
-            return list;
-        }
-
-        com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
-        for (com.google.gson.JsonElement element : resultArray) {
-            if (!element.isJsonObject()) continue;
-            com.google.gson.JsonObject item = element.getAsJsonObject();
-
-            // 过滤非视频类型的搜索项 (如 user, live, article 等)
-            if (item.has("type") && !"video".equals(item.get("type").getAsString())) {
-                continue;
-            }
-
-            String bvid = item.has("bvid") ? item.get("bvid").getAsString() : "";
-            if (bvid.isEmpty() && item.has("aid")) {
-                bvid = "AV" + item.get("aid").getAsString();
-            }
-
-            String title = item.has("title") ? item.get("title").getAsString() : "";
-            // 清理 B 站搜索标题里的 HTML 高亮标签 <em class="keyword">...</em>
-            title = title.replaceAll("<[^>]+>", "");
-
-            String pic = item.has("pic") ? item.get("pic").getAsString() : "";
-            if (pic.startsWith("//")) {
-                pic = "https:" + pic;
-            }
-
-            String remark = item.has("duration") ? item.get("duration").getAsString() : "";
-            if (item.has("author")) {
-                remark = item.get("author").getAsString() + (remark.isEmpty() ? "" : " | " + remark);
-            }
-
-            if (!bvid.isEmpty() && !title.isEmpty()) {
-                Vod vod = new Vod();
-                vod.setVodId(bvid);
-                vod.setVodName(title);
-                vod.setVodPic(pic);
-                vod.setVodRemarks(remark);
-                list.add(vod);
-            }
-        }
-    } catch (Exception e) {
-        com.github.catvod.crawler.SpiderDebug.log("parseSearchJson Error: " + e.getMessage());
-    }
-    return list;
-}
     
     
     @Override
@@ -749,74 +657,17 @@ private List<Vod> parseSearchJson(String json) {
             return Result.string(new ArrayList<>());
         }
     }
-        int currentPage = 1;
-    if (pg != null) {
-        try {
-            currentPage = Integer.parseInt(pg.trim());
-        } catch (Exception ignored) {}
-    }
+            String order = extend.containsKey("order") ? extend.get("order") : "totalrank";
+            String duration = extend.containsKey("duration") ? extend.get("duration") : "0";
+            if (extend.containsKey("tid")) tid = tid + " " + extend.get("tid");
+            String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" + URLEncoder.encode(tid) + "&order=" + order + "&duration=" + duration + "&page=" + pg;
+           
+            String json = OkHttp.string(api, getHeader());
+            Resp resp = Resp.objectFrom(json);
+            List<Vod> list = new ArrayList<>();
+            for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) list.add(item.getVod());
+            return Result.string(list);
 
-    // 页码映射：如果是第 1 页，去拉 B 站的 1 和 2；如果是第 2 页，去拉 B 站的 3 和 4 ...
-    int biliPage1 = (currentPage - 1) * 2 + 1;
-    int biliPage2 = biliPage1 + 1;
-
-    String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
-    String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
-    if (extend != null && extend.containsKey("tid")) {
-        tid = tid + " " + extend.get("tid");
-    }
-
-    String encodedTid = URLEncoder.encode(tid, "UTF-8");
-    List<Vod> totalList = new ArrayList<>();
-    int totalPage = 1;
-
-    // --- 第一次请求：拉取 biliPage1 ---
-    String api1 = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" 
-               + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage1;
-
-    String json1 = OkHttp.string(api1, getHeader());
-
-    if (json1 != null && !json1.trim().isEmpty()) {
-        totalPage = parseTotalPage(json1);
-        List<Vod> list1 = parseSearchJson(json1);
-        totalList.addAll(list1);
-
-        // --- 第二次请求：无论有没有解析出 totalPage，模仿抓包行为，直接无脑发 biliPage2 ---
-        // 只要第一页查出了数据，就发起第二次请求拉取相邻页
-        if (!list1.isEmpty()) {
-            String api2 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
-                       + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage2;
-            
-            // 稍作间隔，防止并发过快
-            try { Thread.sleep(800); } catch (Exception ignored) {}
-
-            String json2 = OkHttp.string(api2, getHeader());
-            if (json2 != null && !json2.trim().isEmpty()) {
-                List<Vod> list2 = parseSearchJson(json2);
-                totalList.addAll(list2);
-            }
-        }
-    }
-
-    // 返回 TVBox 标准结果
-    try {
-        org.json.JSONObject resultJson = new org.json.JSONObject();
-        resultJson.put("page", currentPage);
-        // 因为一次拉了 B 站的 2 页，总页数折半向上取整
-        resultJson.put("pagecount", (int) Math.ceil((double) totalPage / 2));
-        resultJson.put("limit", 40); // 20 + 20 条
-
-        org.json.JSONArray jsonArray = new org.json.JSONArray();
-        com.google.gson.Gson gson = new com.google.gson.Gson();
-        for (Vod vod : totalList) {
-            jsonArray.put(new org.json.JSONObject(gson.toJson(vod)));
-        }
-        resultJson.put("list", jsonArray);
-
-        return resultJson.toString();
-    } catch (Exception e) {
-        return Result.string(totalList);
-    }
         
     }
 
