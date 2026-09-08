@@ -78,6 +78,7 @@ public class Bili extends Spider {
         if (cookie != null) headers.put("cookie", cookie);
         headers.put("origin", "https://www.bilibili.com");
         headers.put("User-Agent", Util.CHROME);
+        headers.put("Accept", "application/json, text/plain, */*");
         
         
         
@@ -576,16 +577,30 @@ private void stopPolling() {
     }
 
     @Override
-public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-    // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi 或 login_setting)
-    if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
-        if (pg != null && !pg.trim().equals("1") && !pg.isEmpty()) {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
+        if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
+
+        // 1. 捕获 Filter 按钮点击：直接在当前页面弹窗，绝对无背景跳转
+        //if (extend != null && "action_dialog".equals(extend.get("action"))) {
+         //   SpiderDebug.log("===[Bili Category] 捕获到 Filter 账号配置操作，直接弹窗");
+         //   Init.run(this::showPeizhiDialog);
+        //}
+
+        // 2. 限制分页请求，防止多卡片
+        if (pg != null && !pg.equals("1") && !pg.isEmpty()) {
             return Result.string(new ArrayList<>());
         }
 
+        // 3. 实时刷新 Cookie 与内存登录标志
         setCookie();
-        this.login = !TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA");
+        if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
+            this.login = true;
+        } else {
+            this.login = false;
+        }
 
+        // 4. 构建当前分类页面中央的静态提示卡片
         try {
             org.json.JSONObject json = new org.json.JSONObject();
             json.put("page", 1);
@@ -598,6 +613,8 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
             vodObj.put("vod_id", "notice_card");
             vodObj.put("vod_name", "【提示】请点击上方「账号配置」按钮弹出登录框");
             vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
+            
+            // 实时展示登录状态角标
             vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录");
             
             array.put(vodObj);
@@ -609,196 +626,105 @@ public String categoryContent(String tid, String pg, boolean filter, HashMap<Str
         }
     }
 
-    // 2. UP 主空间视频
-    if (tid.endsWith("/{pg}")) {
-        LinkedHashMap<String, Object> params = new LinkedHashMap<>();
-        params.put("mid", tid.split("/")[0]);
-        params.put("pn", pg);
-        List<Vod> list = new ArrayList<>();
+        // 2. 如果是 UP 主空间视频
+        if (tid.endsWith("/{pg}")) {
+            LinkedHashMap<String, Object> params = new LinkedHashMap<>();
+            params.put("mid", tid.split("/")[0]);
+            params.put("pn", pg);
+            List<Vod> list = new ArrayList<>();
 
-        if (wbi == null) checkLogin();
+            if (wbi == null) checkLogin();
 
-        String query = (wbi != null) ? wbi.getQuery(params) : "";
-        String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + query, getHeader());
-        if (json != null && !json.isEmpty()) {
-            json = json.replaceAll("\"//", "\"https://");
-            Resp resp = Resp.objectFrom(json);
-            if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
-                com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
-                if (vlist != null && vlist.isJsonArray()) {
-                    for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
-                        if (item != null && item.getVod() != null) {
-                            list.add(item.getVod());
+            String query = (wbi != null) ? wbi.getQuery(params) : "";
+            String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + query, getHeader());
+            if (json != null && !json.isEmpty()) {
+                json = json.replaceAll("\"//", "\"https://");
+                Resp resp = Resp.objectFrom(json);
+                if (resp != null && resp.getData() != null && resp.getData().getList() != null) {
+                    com.google.gson.JsonElement vlist = resp.getData().getList().getAsJsonObject().get("vlist");
+                    if (vlist != null && vlist.isJsonArray()) {
+                        for (Resp.Result item : Resp.Result.arrayFrom(vlist)) {
+                            if (item != null && item.getVod() != null) {
+                                list.add(item.getVod());
+                            }
                         }
                     }
                 }
             }
-        }
-        return Result.string(list);
-    } else {
-        // 3. 关键字/分类搜索
-        int currentPage = 1;
-        if (pg != null) {
-            try {
-                currentPage = Integer.parseInt(pg.trim());
-            } catch (Exception ignored) {}
-        }
-
-        // 页码映射：pg=1 请求 B 站 page=1，pg=2 请求 B 站 page=3
-        int biliPage = (currentPage == 1) ? 1 : currentPage + 1;
-
-        String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
-        String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
-        if (extend != null && extend.containsKey("tid")) {
-            tid = tid + " " + extend.get("tid");
-        }
-
-        String encodedTid = URLEncoder.encode(tid, "UTF-8");
-        
-        // --- 请求 1：当前页 (B站 page=biliPage) ---
-        String api1 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
-                   + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage;
-
-        String json1 = OkHttp.string(api1, getHeader());
-        List<Vod> totalList = new ArrayList<>();
-        int totalPage = 1;
-
-        if (json1 != null && !json1.trim().isEmpty()) {
-            totalPage = parseTotalPage(json1);
-            List<Vod> page1List = parseSearchJson(json1);
-            totalList.addAll(page1List);
-
-            // 💡【核心逻辑修复】
-            // 只要处于第 1 页，且（解析出了 totalPage >= 2 或者 第1页数据条数达到满页 20 条），就强制发送第 2 次请求
-            if (currentPage == 1 && (totalPage >= 2 || page1List.size() >= 20)) {
-                com.github.catvod.crawler.SpiderDebug.log("===[Bili Search] 触发第 2 次请求，正在拉取 B 站 page=2");
-                try { Thread.sleep(100); } catch (Exception ignored) {}
-
-                String api2 = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
-                           + encodedTid + "&order=" + order + "&duration=" + duration + "&page=2";
-                
-                String json2 = OkHttp.string(api2, getHeader());
-                if (json2 != null && !json2.trim().isEmpty()) {
-                    List<Vod> page2List = parseSearchJson(json2);
-                    totalList.addAll(page2List);
-                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Search] 第 2 次请求成功，合并追加了 " + page2List.size() + " 条数据");
-                }
+            return Result.string(list);
+        } else {
+            // 3. 关键字/分类搜索
+            String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
+            String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
+            if (extend != null && extend.containsKey("tid")) {
+                tid = tid + " " + extend.get("tid");
             }
-        }
 
-        // 封装返回
-        try {
-            org.json.JSONObject resultJson = new org.json.JSONObject();
-            resultJson.put("page", currentPage);
-            resultJson.put("pagecount", totalPage);
-            resultJson.put("limit", 20);
+            String encodedTid = URLEncoder.encode(tid, "UTF-8");
+            String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" 
+                       + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + pg;
 
-            org.json.JSONArray jsonArray = new org.json.JSONArray();
-            com.google.gson.Gson gson = new com.google.gson.Gson();
-            for (Vod vod : totalList) {
-                jsonArray.put(new org.json.JSONObject(gson.toJson(vod)));
-            }
-            resultJson.put("list", jsonArray);
+            String json = OkHttp.string(api, getHeader());
+            List<Vod> list = new ArrayList<>();
 
-            return resultJson.toString();
-        } catch (Exception e) {
-            return Result.string(totalList);
-        }
-    }
-}
+            if (json != null && !json.trim().isEmpty()) {
+                try {
+                    com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                    if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+                        com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+                        if (data.has("result") && data.get("result").isJsonArray()) {
+                            com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
+                            com.google.gson.Gson gson = new com.google.gson.Gson();
 
-/**
- * 优化后的总页数解析：多重备用机制提取 numPages
- */
-private int parseTotalPage(String json) {
-    try {
-        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-            
-            // 1. 直接获取 numPages
-            if (data.has("numPages")) {
-                int numPages = data.get("numPages").getAsInt();
-                if (numPages > 0) return Math.min(numPages, 50);
-            }
-            
-            // 2. 备用方式：用 total 和 pagesize/ps 向上取整计算
-            if (data.has("total")) {
-                int total = data.get("total").getAsInt();
-                int pageSize = data.has("pagesize") ? data.get("pagesize").getAsInt() : 20;
-                if (total > 0 && pageSize > 0) {
-                    int calcPages = (total + pageSize - 1) / pageSize;
-                    return Math.min(calcPages, 50);
-                }
-            }
-        }
-    } catch (Exception e) {
-        com.github.catvod.crawler.SpiderDebug.log("===[Bili Parse TotalPage Error] " + e.getMessage());
-    }
-    return 1;
-}
+                            for (com.google.gson.JsonElement element : resultArray) {
+                                if (!element.isJsonObject()) continue;
+                                com.google.gson.JsonObject itemObj = element.getAsJsonObject();
 
-/**
- * 辅助方法：解析 B 站搜索接口 JSON 里的视频列表
- */
-private List<Vod> parseSearchJson(String json) {
-    List<Vod> list = new ArrayList<>();
-    try {
-        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-        if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-            com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-            if (data.has("result") && data.get("result").isJsonArray()) {
-                com.google.gson.JsonArray resultArray = data.getAsJsonArray("result");
-                com.google.gson.Gson gson = new com.google.gson.Gson();
+                                if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
+                                    com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
 
-                for (com.google.gson.JsonElement element : resultArray) {
-                    if (!element.isJsonObject()) continue;
-                    com.google.gson.JsonObject itemObj = element.getAsJsonObject();
+                                    String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
+                                    String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
+                                    String vodId = bvid + "@" + aid;
 
-                    if (itemObj.has("type") && "video".equals(itemObj.get("type").getAsString())) {
-                        com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
+                                    String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
+                                    if (!title.isEmpty()) {
+                                        title = title.replaceAll("<[^>]*>", "")
+                                                     .replaceAll("&quot;", "\"")
+                                                     .replaceAll("&amp;", "&")
+                                                     .replaceAll("&lt;", "<")
+                                                     .replaceAll("&gt;", ">")
+                                                     .replaceAll("&nbsp;", " ");
+                                    }
 
-                        String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
-                        String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
-                        String vodId = bvid + "@" + aid;
+                                    String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
+                                    if (pic.startsWith("//")) {
+                                        pic = "https:" + pic;
+                                    }
 
-                        String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
-                        if (!title.isEmpty()) {
-                            title = title.replaceAll("<[^>]*>", "")
-                                         .replaceAll("&quot;", "\"")
-                                         .replaceAll("&amp;", "&")
-                                         .replaceAll("&lt;", "<")
-                                         .replaceAll("&gt;", ">")
-                                         .replaceAll("&nbsp;", " ");
-                        }
+                                    String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
 
-                        String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
-                        if (pic.startsWith("//")) {
-                            pic = "https:" + pic;
-                        }
+                                    vodJson.addProperty("vod_id", vodId);
+                                    vodJson.addProperty("vod_name", title);
+                                    vodJson.addProperty("vod_pic", pic);
+                                    vodJson.addProperty("vod_remarks", durationStr);
 
-                        String durationStr = itemObj.has("duration") ? itemObj.get("duration").getAsString() : "";
-
-                        vodJson.addProperty("vod_id", vodId);
-                        vodJson.addProperty("vod_name", title);
-                        vodJson.addProperty("vod_pic", pic);
-                        vodJson.addProperty("vod_remarks", durationStr);
-
-                        Vod vod = gson.fromJson(vodJson, Vod.class);
-                        if (vod != null) {
-                            list.add(vod);
+                                    Vod vod = gson.fromJson(vodJson, Vod.class);
+                                    if (vod != null) {
+                                        list.add(vod);
+                                    }
+                                }
+                            }
                         }
                     }
+                } catch (Throwable t) {
+                    com.github.catvod.crawler.SpiderDebug.log("===[Bili Error] " + t.getMessage());
                 }
             }
+
+            return Result.string(list);
         }
-    } catch (Throwable t) {
-        com.github.catvod.crawler.SpiderDebug.log("===[Bili Parse Search Error] " + t.getMessage());
     }
-    return list;
-}
-
-
 
 @Override
 public String detailContent(List<String> ids) throws Exception {
