@@ -498,89 +498,19 @@ private void stopPolling() {
     // ====================== 分类与业务逻辑 ======================
 
 @Override
-public String homeContent(boolean filter) throws Exception {
-    // 💡 调试日志 1：打印传入的 extend 全貌
-    SpiderDebug.log("===[Bili Home] extend 配置信息: " + (extend != null ? extend.toString() : "null"));
-
-    // 1. 处理 "json" 路径：直接利用 TVBox 转换好的 URL 请求内容
-    if (extend != null && extend.has("json")) {
-        String jsonPath = extend.get("json").getAsString();
-        // 💡 调试日志 2：打印从 extend 里提取出的 json 路径/URL
-        SpiderDebug.log("===[Bili Home] extend.get(\"json\") 目标路径/URL: " + jsonPath);
-
-        String jsonStr = OkHttp.string(jsonPath);
-        // 💡 调试日志 3：打印网络获取到的 jsonStr 内容
-        SpiderDebug.log("===[Bili Home] OkHttp 获取到的 jsonStr 内容: " + jsonStr);
-
-        if (!TextUtils.isEmpty(jsonStr)) {
-            try {
-                JsonObject jsonObject = JsonParser.parseString(jsonStr).getAsJsonObject();
-                if (jsonObject.has("class") && jsonObject.get("class").isJsonArray()) {
-                    List<Class> classes = new ArrayList<>();
-                    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
-                    JsonArray classArray = jsonObject.getAsJsonArray("class");
-
-                    for (JsonElement element : classArray) {
-                        if (!element.isJsonObject()) continue;
-                        JsonObject item = element.getAsJsonObject();
-
-                        String typeId = item.has("type_id") ? item.get("type_id").getAsString() : "";
-                        String typeName = item.has("type_name") ? item.get("type_name").getAsString() : "";
-
-                        classes.add(new Class(typeId, typeName));
-
-                        // 💡 关键操作：遇到登录配置分类，注入弹窗 Filter 按钮
-                        if ("peizhi".equals(typeId) || "login_setting".equals(typeId)) {
-                            SpiderDebug.log("===[Bili Home] 成功匹配到登录配置分类 typeId: " + typeId + "，开始挂载弹窗按钮");
-                            List<Filter.Value> values = new ArrayList<>();
-                            values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
-
-                            List<Filter> peizhiFilters = new ArrayList<>();
-                            peizhiFilters.add(new Filter("action", "账号配置", values));
-                            filters.put(typeId, peizhiFilters);
-                        } else {
-                            filters.put(typeId, getFilter());
-                        }
-                    }
-
-                    SpiderDebug.log("===[Bili Home] 分类及 Filter 重组完毕，共加载分类数: " + classes.size());
-                    // 返回重新组装好（挂载了弹窗按钮）的分类数据
-                    return Result.string(classes, filters);
-                }
-            } catch (Exception e) {
-                SpiderDebug.log("===[Bili Parse Json Error] " + e.getMessage());
-            }
-            // 如果解析失败，回退直接返回原 JSON 字符串
-            return jsonStr;
-        } else {
-            SpiderDebug.log("===[Bili Home] OkHttp 获取的 jsonStr 为空！");
-        }
-    }
-
-    // 2. 兼容原版 "type" 拼接分类逻辑
-    List<Class> classes = new ArrayList<>();
-    LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
-    if (extend != null && extend.has("type")) {
-        String typeStr = extend.get("type").getAsString();
-        SpiderDebug.log("===[Bili Home] 走 type 拼接逻辑: " + typeStr);
-        String[] types = typeStr.split("#");
-        for (String type : types) {
-            classes.add(new Class(type));
-            if ("peizhi".equals(type) || "login_setting".equals(type)) {
-                List<Filter.Value> values = new ArrayList<>();
-                values.add(new Filter.Value("【点击弹窗配置账号】", "action_dialog"));
-                List<Filter> peizhiFilters = new ArrayList<>();
-                peizhiFilters.add(new Filter("action", "账号配置", values));
-                filters.put(type, peizhiFilters);
-            } else {
+    public String homeContent(boolean filter) throws Exception {
+        if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
+        List<Class> classes = new ArrayList<>();
+        LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
+        if (extend != null && extend.has("type")) {
+            String[] types = extend.get("type").getAsString().split("#");
+            for (String type : types) {
+                classes.add(new Class(type));
                 filters.put(type, getFilter());
             }
         }
+        return Result.string(classes, filters);
     }
-
-    return Result.string(classes, filters);
-}
-
 
 
     @Override
@@ -651,10 +581,10 @@ public String homeContent(boolean filter) throws Exception {
         if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
 
         // 1. 捕获 Filter 按钮点击：直接在当前页面弹窗，绝对无背景跳转
-        if (extend != null && "action_dialog".equals(extend.get("action"))) {
-            SpiderDebug.log("===[Bili Category] 捕获到 Filter 账号配置操作，直接弹窗");
-            Init.run(this::showPeizhiDialog);
-        }
+        //if (extend != null && "action_dialog".equals(extend.get("action"))) {
+         //   SpiderDebug.log("===[Bili Category] 捕获到 Filter 账号配置操作，直接弹窗");
+         //   Init.run(this::showPeizhiDialog);
+        //}
 
         // 2. 限制分页请求，防止多卡片
         if (pg != null && !pg.equals("1") && !pg.isEmpty()) {
@@ -795,63 +725,129 @@ public String homeContent(boolean filter) throws Exception {
         }
     }
 
-    @Override
-    public String detailContent(List<String> ids) throws Exception {
-       
-    
-        if (!login) checkLogin();
+   @Override
+public String detailContent(List<String> ids) throws Exception {
+    if (ids == null || ids.isEmpty()) {
+        return Result.string(new ArrayList<>());
+    }
 
-        String[] split = ids.get(0).split("@");
-        String bvid = split[0];
-        String aid = split[1];
+    String id = ids.get(0);
 
-        String api = "https://api.bilibili.com/x/web-interface/view?aid=" + aid;
-        String json = OkHttp.string(api, getHeader());
-        Data detail = Resp.objectFrom(json).getData();
+    // ================= 1. 拦截配置卡片点击，触发弹窗 =================
+    if ("notice_card".equals(id) || "peizhi".equals(id) || "login_setting".equals(id)) {
+        SpiderDebug.log("===[Bili Detail] 点击了账号配置卡片 (id=" + id + ")，唤醒弹窗");
+
+        // 主线程调起登录/配置 Dialog
+        Init.run(() -> {
+            try {
+                showPeizhiDialog();
+            } catch (Exception e) {
+                SpiderDebug.log("===[Bili Dialog Error] " + e.getMessage());
+            }
+        });
+
+        // 构造伪详情，不带播放列表，防止跳出播放器或报错
         Vod vod = new Vod();
-        vod.setVodId(ids.get(0));
-        vod.setVodPic(detail.getPic());
-        vod.setVodName(detail.getTitle());
-        vod.setTypeName(detail.getType());
-        vod.setVodContent(detail.getDesc());
-        vod.setVodDirector(detail.getOwner().getFormat());
-        vod.setVodRemarks(detail.getDuration() / 60 + "分鐘");
+        vod.setVodId(id);
+        vod.setVodName("Bilibili 账号配置");
+        vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
+        vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
+        vod.setVodContent("Bilibili 账号登录与 Cookie 配置界面");
 
-        List<String> acceptDesc = new ArrayList<>();
-        List<Integer> acceptQuality = new ArrayList<>();
-        api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
-        json = OkHttp.string(api, getHeader());
-        Data play = Resp.objectFrom(json).getData();
-        if (play != null && play.getAcceptQuality() != null) {
-            for (int i = 0; i < play.getAcceptQuality().size(); i++) {
-                int qn = play.getAcceptQuality().get(i);
-                if (!login && qn > 32) continue;
-                if (!isVip && qn > 80) continue;
-                acceptQuality.add(play.getAcceptQuality().get(i));
+        List<Vod> list = new ArrayList<>();
+        list.add(vod);
+        return Result.string(list);
+    }
+
+    // ================= 2. 正常视频详情解析 =================
+    if (!login) checkLogin();
+
+    // 检查 ID 格式是否符合 bvid@aid 规范，防止分割溢出
+    String[] split = id.split("@");
+    if (split.length < 2) {
+        return Result.string(new ArrayList<>());
+    }
+
+    String bvid = split[0];
+    String aid = split[1];
+
+    String api = "https://api.bilibili.com/x/web-interface/view?aid=" + aid;
+    String json = OkHttp.string(api, getHeader());
+    
+    Resp resp = Resp.objectFrom(json);
+    if (resp == null || resp.getData() == null) {
+        return Result.string(new ArrayList<>());
+    }
+    
+    Data detail = resp.getData();
+    Vod vod = new Vod();
+    vod.setVodId(id);
+    vod.setVodPic(detail.getPic());
+    vod.setVodName(detail.getTitle());
+    vod.setTypeName(detail.getType());
+    vod.setVodContent(detail.getDesc());
+    if (detail.getOwner() != null) {
+        vod.setVodDirector(detail.getOwner().getFormat());
+    }
+    vod.setVodRemarks(detail.getDuration() / 60 + "分鐘");
+
+    // 解析画质与清晰度描述
+    List<String> acceptDesc = new ArrayList<>();
+    List<Integer> acceptQuality = new ArrayList<>();
+    api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
+    json = OkHttp.string(api, getHeader());
+    
+    Resp playResp = Resp.objectFrom(json);
+    Data play = (playResp != null) ? playResp.getData() : null;
+    
+    if (play != null && play.getAcceptQuality() != null && play.getAcceptDescription() != null) {
+        for (int i = 0; i < play.getAcceptQuality().size(); i++) {
+            int qn = play.getAcceptQuality().get(i);
+            if (!login && qn > 32) continue;
+            if (!isVip && qn > 80) continue;
+            acceptQuality.add(qn);
+            if (i < play.getAcceptDescription().size()) {
                 acceptDesc.add(play.getAcceptDescription().get(i));
             }
         }
-
-        List<String> episode = new ArrayList<>();
-        LinkedHashMap<String, String> flag = new LinkedHashMap<>();
-        for (Page page : detail.getPages()) episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
-        flag.put("B站", TextUtils.join("#", episode));
-
-        episode = new ArrayList<>();
-        api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
-        json = OkHttp.string(api, getHeader());
-        JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
-        if (array != null) {
-            for (int i = 0; i < array.size(); i++) {
-                JsonObject object = array.get(i).getAsJsonObject();
-                episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
-            }
-        }
-        flag.put("相关", TextUtils.join("#", episode));
-        vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
-        vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
-        return Result.string(vod);
     }
+
+    LinkedHashMap<String, String> flag = new LinkedHashMap<>();
+
+    // 2.1 B站分集/选集列表
+    if (detail.getPages() != null) {
+        List<String> episode = new ArrayList<>();
+        for (Page page : detail.getPages()) {
+            episode.add(page.getPart() + "$" + aid + "+" + page.getCid() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
+        }
+        flag.put("B站", TextUtils.join("#", episode));
+    }
+
+    // 2.2 相关推荐视频
+    api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
+    json = OkHttp.string(api, getHeader());
+    if (json != null && !json.trim().isEmpty()) {
+        try {
+            JsonObject rootObj = Json.parse(json).getAsJsonObject();
+            if (rootObj.has("data") && rootObj.get("data").isJsonArray()) {
+                JsonArray array = rootObj.getAsJsonArray("data");
+                List<String> episode = new ArrayList<>();
+                for (int i = 0; i < array.size(); i++) {
+                    JsonObject object = array.get(i).getAsJsonObject();
+                    episode.add(object.get("title").getAsString() + "$" + object.get("aid").getAsInt() + "+" + object.get("cid").getAsInt() + "+" + TextUtils.join(":", acceptQuality) + "+" + TextUtils.join(":", acceptDesc));
+                }
+                flag.put("相关", TextUtils.join("#", episode));
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("===[Bili Related Parse Error] " + e.getMessage());
+        }
+    }
+
+    vod.setVodPlayFrom(TextUtils.join("$$$", flag.keySet()));
+    vod.setVodPlayUrl(TextUtils.join("$$$", flag.values()));
+    
+    return Result.string(vod);
+}
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
