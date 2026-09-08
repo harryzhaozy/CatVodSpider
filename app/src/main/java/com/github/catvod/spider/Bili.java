@@ -114,6 +114,40 @@ public class Bili extends Spider {
         return Path.tv("bilibili");
     }
 
+    /**
+ * 检查当前 B 站 Cookie 是否需要刷新
+ * 
+ * @return true 表示需要刷新 Cookie；false 表示无需刷新或请求失败/未登录
+ */
+ private boolean checkNeedRefreshCookie() {
+    // 未设置 Cookie 时直接无需刷新
+    if (TextUtils.isEmpty(this.cookie)) {
+        return false;
+    }
+
+    String url = "https://passport.bilibili.com/x/passport-login/web/cookie/info";
+    try {
+        String json = OkHttp.string(url, getHeader());
+        if (TextUtils.isEmpty(json)) {
+            return false;
+        }
+
+        com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        // 校验 API 响应 code 是否为 0 (成功)
+        if (jsonObject.has("code") && jsonObject.get("code").getAsInt() == 0) {
+            if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
+                com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
+                if (data.has("refresh") && !data.get("refresh").isJsonNull()) {
+                    return data.get("refresh").getAsBoolean();
+                }
+            }
+        }
+    } catch (Exception e) {
+        com.github.catvod.crawler.SpiderDebug.log("checkNeedRefreshCookie Error: " + e.getMessage());
+    }
+    return false;
+}
+    
     @Override
     public void init(Context context, String extend) throws Exception {
         this.mContext = context;
@@ -128,6 +162,7 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
         setCookie();
+        checkNeedRefreshCookie();
         checkLogin();
     }
 
@@ -753,7 +788,7 @@ private List<Vod> parseSearchJson(String json) {
                        + encodedTid + "&order=" + order + "&duration=" + duration + "&page=" + biliPage2;
             
             // 稍作间隔，防止并发过快
-            try { Thread.sleep(500); } catch (Exception ignored) {}
+            try { Thread.sleep(800); } catch (Exception ignored) {}
 
             String json2 = OkHttp.string(api2, getHeader());
             if (json2 != null && !json2.trim().isEmpty()) {
