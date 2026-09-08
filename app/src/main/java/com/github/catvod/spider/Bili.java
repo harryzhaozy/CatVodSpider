@@ -502,12 +502,19 @@ public String homeContent(boolean filter) throws Exception {
 
     // 1. 如果配置了 "json" 路径 (如 http 链接或在线配置)
     if (extend != null && extend.has("json")) {
-        String jsonPath = extend.get("json").getAsString();
-        String jsonStr = "";
+    String jsonPath = extend.get("json").getAsString();
+    String jsonStr = "";
 
-        if (jsonPath.startsWith("http")) {
-            jsonStr = OkHttp.string(jsonPath, getHeader());
+    if (jsonPath.startsWith("http")) {
+        jsonStr = OkHttp.string(jsonPath, getHeader());
+    } else {
+        // 尝试读取本地/扩展文件
+        try {
+            jsonStr = com.github.catvod.spider.Init.getExt(jsonPath);
+        } catch (Throwable t) {
+            SpiderDebug.log("===[Bili Read Ext Json Fail] " + t.getMessage());
         }
+    }
 
         if (!TextUtils.isEmpty(jsonStr)) {
             try {
@@ -673,7 +680,7 @@ public String homeContent(boolean filter) throws Exception {
             org.json.JSONObject vodObj = new org.json.JSONObject();
             vodObj.put("vod_id", "notice_card");
             vodObj.put("vod_name", "【提示】请点击上方「账号配置」按钮弹出登录框");
-            vodObj.put("vod_pic", "https://i0.hdslb.com/bfs/archive/be27f91722d515902d292e39951bf41c0944e892.jpg");
+            vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
             
             // 实时展示登录状态角标
             vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录");
