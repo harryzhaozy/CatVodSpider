@@ -502,24 +502,27 @@ public String homeContent(boolean filter) throws Exception {
 
     // 1. 如果配置了 "json" 路径
     if (extend != null && extend.has("json")) {
-        String jsonPath = extend.get("json").getAsString();
-        String jsonStr = "";
+    String jsonPath = extend.get("json").getAsString();
+    String jsonStr = "";
 
-        if (jsonPath.startsWith("http")) {
-            jsonStr = OkHttp.string(jsonPath, getHeader());
-        } else {
-            // 本地路径读取（纯原生，不依赖 Util.fs）
-            try {
-                java.io.File file = new java.io.File(jsonPath.replace("./", ""));
-                if (file.exists() && file.isFile()) {
-                    byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
-                    jsonStr = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-                    SpiderDebug.log("===[Bili Read Local Json Success] ");
-                }
-            } catch (Throwable t) {
-                SpiderDebug.log("===[Bili Read Local Json Fail] " + t.getMessage());
+    if (jsonPath.startsWith("http")) {
+        // 1. 如果是远程网络链接，直接请求
+        jsonStr = OkHttp.string(jsonPath, getHeader());
+    } else {
+        // 2. 如果是相对路径 ，通过 CatVod 框架的 Path 工具类获取真实本地 File
+        try {
+            java.io.File file = com.github.catvod.utils.Path.local(jsonPath);
+            SpiderDebug.log("===[Bili] 转换后的绝对路径: " + (file != null ? file.getAbsolutePath() : "null"));
+
+            if (file != null && file.exists() && file.isFile()) {
+                byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+                jsonStr = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                SpiderDebug.log("===[Bili] 读取相对路径 json 成功！");
             }
+        } catch (Throwable t) {
+            SpiderDebug.log("===[Bili Read Local Path Fail] " + t.getMessage());
         }
+    }
 
         if (!TextUtils.isEmpty(jsonStr)) {
             try {
