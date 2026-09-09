@@ -529,7 +529,7 @@ private void stopPolling() {
 
     // ====================== 分类与业务逻辑 ======================
     @Override
-    public String action(String action) throws Exception {
+    public String action(String action)  {
 
         if ("show_settings".equals(action)) {
 
