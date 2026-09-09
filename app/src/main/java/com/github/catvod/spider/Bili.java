@@ -162,8 +162,19 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
         setCookie();
-        checkNeedRefreshCookie();
+        if(checkNeedRefreshCookie())
+        {
+            Init.run(() -> {
+                Toast.makeText(context, "需要刷新Cookie!", Toast.LENGTH_SHORT).show();
+                });
+        }
         checkLogin();
+        if(!this.login)
+        {
+            Init.run(() -> {
+                Toast.makeText(context, "末登录，登录B站后看高清画质！", Toast.LENGTH_SHORT).show();
+                });
+        }
     }
 
     private void checkLogin() {
@@ -580,8 +591,9 @@ private void stopPolling() {
             Result result = new Result();
             Vod vod = new Vod();
             vod.setVodId("my_dialog");
-            vod.setVodName("【提示】请点击上方「账号配置」按钮弹出登录框");
+            vod.setVodName("请点击进行配置");
             vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
+            vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
             vod.setAction("show_settings");
             List<Vod> list = new ArrayList<>();
             list.add(vod);
