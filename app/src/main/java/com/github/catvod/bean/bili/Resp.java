@@ -6,12 +6,9 @@ import com.github.catvod.bean.Vod;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
-import com.google.gson.reflect.TypeToken;
 
-import org.jsoup.Jsoup;
-
-import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Resp {
@@ -32,15 +29,18 @@ public class Resp {
     }
 
     public Data getData() {
-        return data == null ? new Data() : data; // 绝不返回 null
+        return data == null ? new Data() : data;
     }
 
     public static class Result {
 
         @SerializedName("bvid")
         private String bvid;
+        
+        // 使用 JsonElement 兼容数字和字符串类型的 aid，防止大数值溢出/解析失败
         @SerializedName("aid")
-        private String aid;
+        private JsonElement aid;
+        
         @SerializedName("title")
         private String title;
         @SerializedName("pic")
@@ -50,16 +50,18 @@ public class Resp {
         @SerializedName("length")
         private String length;
 
-       
+        /**
+         * 替换 TypeToken 避免低版本 Android 触发 ThreadLocal/脱糖 API 崩溃
+         */
         public static List<Result> arrayFrom(JsonElement str) {
             List<Result> list = new ArrayList<>();
             if (str == null || !str.isJsonArray()) {
                 return list;
             }
             try {
-                Type listType = new TypeToken<List<Result>>() {}.getType();
-                List<Result> resultList = new Gson().fromJson(str, listType);
-                return resultList == null ? list : resultList;
+                // 使用数组 Class 替代 TypeToken 匿名内部类
+                Result[] array = new Gson().fromJson(str, Result[].class);
+                return array == null ? list : Arrays.asList(array);
             } catch (Exception e) {
                 return list;
             }
@@ -70,16 +72,18 @@ public class Resp {
         }
 
         public String getAid() {
-            return TextUtils.isEmpty(aid) ? "" : aid;
+            if (aid == null || aid.isJsonNull()) return "";
+            try {
+                return aid.getAsString();
+            } catch (Exception e) {
+                return "";
+            }
         }
 
         public String getTitle() {
             return TextUtils.isEmpty(title) ? "" : title;
         }
 
-        /**
-         * 安全的时间格式转换（拦截带 ':' 的字符串，捕获数字转换异常）
-         */
         public String getDuration() {
             String dur = TextUtils.isEmpty(duration) ? getLength() : duration;
             if (TextUtils.isEmpty(dur)) return "";
@@ -87,7 +91,7 @@ public class Resp {
             try {
                 int seconds = Integer.parseInt(dur);
                 if (seconds < 60) return seconds + "秒";
-                return (seconds / 60) + "分鐘";
+                return (seconds / 60) + "分钟";
             } catch (Exception e) {
                 return dur;
             }
@@ -101,9 +105,6 @@ public class Resp {
             return TextUtils.isEmpty(pic) ? "" : pic;
         }
 
-        /**
-         * 兼容单 BV 号和双 ID，避免拼接尾巴上的多余 '@' 符号
-         */
         public Vod getVod() {
             Vod vod = new Vod();
             String bv = getBvId();
@@ -119,8 +120,15 @@ public class Resp {
                 vod.setVodId("");
             }
 
-            vod.setVodName(Jsoup.parse(getTitle()).text());
-            vod.setVodPic(getPic().startsWith("//") ? "https:" + getPic() : getPic());
+            // 正则替换比 Jsoup 性能高数倍，避免低配盒子挂起
+            String cleanTitle = getTitle().replaceAll("<[^>]*>", "");
+            vod.setVodName(cleanTitle);
+
+            String picUrl = getPic();
+            if (picUrl.startsWith("//")) {
+                picUrl = "https:" + picUrl;
+            }
+            vod.setVodPic(picUrl);
             vod.setVodRemarks(getDuration());
             return vod;
         }
