@@ -664,8 +664,7 @@ String duration = (extend != null && extend.containsKey("duration")) ? extend.ge
 if (extend != null && extend.containsKey("tid")) {
     tid = tid + " " + extend.get("tid");
 }
-
-// 补全 UTF-8 编码，避免中文搜索乱码
+//正常处理
 String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" 
            + URLEncoder.encode(tid, "UTF-8") 
            + "&order=" + order 
@@ -673,14 +672,13 @@ String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_ty
            + "&page=" + pg;
 
 String json = OkHttp.string(api, getHeader());
-
-// 由于 Resp、Data 和 Result.arrayFrom() 已经做了完整的防空判断
-// 这里链式调用 resp.getData().getResult() 是绝对安全的
 Resp resp = Resp.objectFrom(json);
 List<Vod> list = new ArrayList<>();
 
 for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
-    list.add(item.getVod());
+    if (!TextUtils.isEmpty(item.getBvId())) {
+        list.add(item.getVod());
+    }
 }
 
 return Result.string(list);
