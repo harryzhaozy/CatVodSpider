@@ -529,7 +529,7 @@ private void stopPolling() {
 
     // ====================== 分类与业务逻辑 ======================
     @Override
-    public void action(String action) throws Exception {
+    public String action(String action) throws Exception {
 
         if ("show_settings".equals(action)) {
 
@@ -541,7 +541,9 @@ private void stopPolling() {
                     SpiderDebug.log("===[Bili Dialog Error] " + e.getMessage());
                 }
             });
+            return "配置";
         }
+        return "其他";
     }
 
     @Override
@@ -581,8 +583,9 @@ private void stopPolling() {
             vod.setVodName("【提示】请点击上方「账号配置」按钮弹出登录框");
             vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
             vod.setAction("show_settings");
-            result.setList(Collections.singletonList(vod));
-            return Result.string(result);
+            List<Vod> list = new ArrayList<>();
+            list.add(vod);
+            return Result.string(list);
         }
 
         //正常处理其他        
