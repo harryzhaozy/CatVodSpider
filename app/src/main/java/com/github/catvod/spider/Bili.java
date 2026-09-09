@@ -528,8 +528,23 @@ private void stopPolling() {
 
 
     // ====================== 分类与业务逻辑 ======================
+    @Override
+    public void action(String action) throws Exception {
 
-@Override
+        if ("show_settings".equals(action)) {
+
+            // 主线程调起登录/配置 Dialog
+            Init.run(() -> {
+                try {
+                    showPeizhiDialog();
+                } catch (Exception e) {
+                    SpiderDebug.log("===[Bili Dialog Error] " + e.getMessage());
+                }
+            });
+        }
+    }
+
+    @Override
     public String homeContent(boolean filter) throws Exception {
         if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
         List<Class> classes = new ArrayList<>();
@@ -560,79 +575,37 @@ private void stopPolling() {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         // 1. 拦截“登陆配置”栏目 (type_id 为 peizhi)
         if ("peizhi".equals(tid) || "login_setting".equals(tid)) {
-
-        // 1. 捕获 Filter 按钮点击：直接在当前页面弹窗，绝对无背景跳转
-        //if (extend != null && "action_dialog".equals(extend.get("action"))) {
-         //   SpiderDebug.log("===[Bili Category] 捕获到 Filter 账号配置操作，直接弹窗");
-         //   Init.run(this::showPeizhiDialog);
-        //}
-
-        // 2. 限制分页请求，防止多卡片
-        if (pg != null && !pg.equals("1") && !pg.isEmpty()) {
-            return Result.string(new ArrayList<>());
+            Result result = new Result();
+            Vod vod = new Vod();
+            vod.setVodId("my_dialog");
+            vod.setVodName("【提示】请点击上方「账号配置」按钮弹出登录框");
+            vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
+            vod.setAction("show_settings");
+            result.setList(Collections.singletonList(vod));
+            return Result.string(result);
         }
 
-        // 3. 实时刷新 Cookie 与内存登录标志
-        setCookie();
-        if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
-            this.login = true;
-        } else {
-            this.login = false;
+        //正常处理其他        
+        String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
+        String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
+        if (extend != null && extend.containsKey("tid")) {
+            tid = tid + " " + extend.get("tid");
         }
-
-        // 4. 构建当前分类页面中央的静态提示卡片
-        try {
-            org.json.JSONObject json = new org.json.JSONObject();
-            json.put("page", 1);
-            json.put("pagecount", 1);
-            json.put("limit", 1);
-            json.put("total", 1);
-
-            org.json.JSONArray array = new org.json.JSONArray();
-            org.json.JSONObject vodObj = new org.json.JSONObject();
-            vodObj.put("vod_id", "notice_card");
-            vodObj.put("vod_name", "【提示】请点击上方「账号配置」按钮弹出登录框");
-            vodObj.put("vod_pic", "https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
-            
-            // 实时展示登录状态角标
-            vodObj.put("vod_remarks", this.login ? "当前状态：已登录" : "当前状态：未登录");
-            
-            array.put(vodObj);
-            json.put("list", array);
-            
-            return json.toString();
-        } catch (Exception e) {
-            return Result.string(new ArrayList<>());
-        }
-    }
-            
-String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
-String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
-
-if (extend != null && extend.containsKey("tid")) {
-    tid = tid + " " + extend.get("tid");
-}
-//正常处理
-String api = "https://api.bilibili.com/x/web-interface/"+(login ? "wbi/" : "")+"search/type?search_type=video&keyword=" 
+        String api = "https://api.bilibili.com/x/web-interface/"+(login ? "wbi/" : "")+"search/type?search_type=video&keyword=" 
            + URLEncoder.encode(tid, "UTF-8") 
            + "&order=" + order 
            + "&duration=" + duration 
            + "&page=" + pg;
+        String json = OkHttp.string(api, getHeader());
+        Resp resp = Resp.objectFrom(json);
+        List<Vod> list = new ArrayList<>();
+        for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
+            if (!TextUtils.isEmpty(item.getBvId())) {
+                list.add(item.getVod());
+            }
+        }
 
-String json = OkHttp.string(api, getHeader());
-Resp resp = Resp.objectFrom(json);
-List<Vod> list = new ArrayList<>();
-
-for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
-    if (!TextUtils.isEmpty(item.getBvId())) {
-        list.add(item.getVod());
-    }
-}
-
-return Result.string(list);
-        
-
-        
+        return Result.string(list); 
     }
 
 @Override
@@ -643,31 +616,6 @@ public String detailContent(List<String> ids) throws Exception {
 
     String id = ids.get(0);
 
-    // ================= 1. 拦截配置卡片点击，触发弹窗 =================
-    if ("notice_card".equals(id) || "peizhi".equals(id) || "login_setting".equals(id)) {
-        SpiderDebug.log("===[Bili Detail] 点击了账号配置卡片 (id=" + id + ")，唤醒弹窗");
-
-        // 主线程调起登录/配置 Dialog
-        Init.run(() -> {
-            try {
-                showPeizhiDialog();
-            } catch (Exception e) {
-                SpiderDebug.log("===[Bili Dialog Error] " + e.getMessage());
-            }
-        });
-
-        // 构造伪详情，不带播放列表，防止跳出播放器或报错
-        Vod vod = new Vod();
-        vod.setVodId(id);
-        vod.setVodName("Bilibili 账号配置");
-        vod.setVodPic("https://q5.itc.cn/images01/20250512/f6fdbe7b18854e1cad03f190f3280f70.jpeg");
-        vod.setVodRemarks(this.login ? "当前状态：已登录" : "当前状态：未登录");
-        vod.setVodContent("Bilibili 账号登录与 Cookie 配置界面");
-
-        List<Vod> list = new ArrayList<>();
-        list.add(vod);
-        return Result.string(list);
-    }
 
     // ================= 2. 正常视频详情解析 =================
     if (!login) checkLogin();
