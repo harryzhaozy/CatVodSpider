@@ -585,7 +585,11 @@ private void stopPolling() {
             vod.setAction("show_settings");
             List<Vod> list = new ArrayList<>();
             list.add(vod);
-            return Result.string(list);
+            int page = Integer.parseInt(pg);
+            return Result.get()
+                 .vod(list)
+                 .page(page, 1, 1, 1)
+                 .string();
         }
 
         //正常处理其他        
