@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Bili extends Spider {
 
-    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc";
+    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; buvid_fp=711a632b5c876fa8bbcf668c1efba551; bp_t_offset_55423440=1203047221809905664;b_lsid=BEB8EE7F_18742FF8C2E";
     private static String cookie;
 
     private JsonObject extend;
@@ -380,7 +380,7 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
-    SpiderDebug.log("===[Bili Poll] 开始单接口（带 SSL 兼容）轮询，qrcodeKey: " + qrcodeKey);
+    //SpiderDebug.log("===[Bili Poll] 开始单接口（带 SSL 兼容）轮询，qrcodeKey: " + qrcodeKey);
     
     // 1. 初始化跳过证书校验的 TrustManager（兼容 Android 6.0 系统根证书过老问题）
     javax.net.ssl.SSLContext sslContext = null;
@@ -453,10 +453,10 @@ public class Bili extends Spider {
             int code = data.get("code").getAsInt();
             String message = data.has("message") ? data.get("message").getAsString() : "";
 
-            SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
+            //SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
 
             if (code == 0) { // 扫码登录成功！
-                SpiderDebug.log("===[Bili Poll Success] 扫码成功，单接口自动截获 Set-Cookie，准备提取...");
+                //SpiderDebug.log("===[Bili Poll Success] 扫码成功，单接口自动截获 Set-Cookie，准备提取...");
                 stopPolling();
 
                 // 4. 从全局 CookieManager 提取这一次单接口请求下发的所有 Cookie
@@ -476,7 +476,7 @@ public class Bili extends Spider {
                         cookie = sb.toString().trim();
                         // 持久化保存 Cookie 到本地缓存
                         Path.write(getCache(), cookie);
-                        SpiderDebug.log("===[Bili Poll Success] 单接口提取并保存 Cookie 成功: " + cookie);
+                        SpiderDebug.log("===[Bili Poll Success] 单接口提取并保存 Cookie 成功: " );
                     } else {
                         SpiderDebug.log("===[Bili Poll Warning] CookieStore 为空，请检查 init 中 CookieManager 是否正常注册");
                     }
