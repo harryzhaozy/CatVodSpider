@@ -549,61 +549,9 @@ private void stopPolling() {
     public String homeVideoContent() {
         String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
         String json = OkHttp.string(api, getHeader());
+        Resp resp = Resp.objectFrom(json);
         List<Vod> list = new ArrayList<>();
-
-        if (json != null && !json.trim().isEmpty()) {
-            try {
-                com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-                if (jsonObject.has("data") && !jsonObject.get("data").isJsonNull()) {
-                    com.google.gson.JsonObject data = jsonObject.getAsJsonObject("data");
-                    if (data.has("list") && data.get("list").isJsonArray()) {
-                        com.google.gson.JsonArray listArray = data.getAsJsonArray("list");
-                        com.google.gson.Gson gson = new com.google.gson.Gson();
-
-                        for (com.google.gson.JsonElement element : listArray) {
-                            if (!element.isJsonObject()) continue;
-                            com.google.gson.JsonObject itemObj = element.getAsJsonObject();
-
-                            com.google.gson.JsonObject vodJson = new com.google.gson.JsonObject();
-
-                            String bvid = itemObj.has("bvid") ? itemObj.get("bvid").getAsString() : "";
-                            String aid = itemObj.has("aid") ? itemObj.get("aid").getAsString() : "";
-                            String vodId = bvid + "@" + aid;
-
-                            String title = itemObj.has("title") ? itemObj.get("title").getAsString() : "";
-
-                            String pic = itemObj.has("pic") ? itemObj.get("pic").getAsString() : "";
-                            if (pic.startsWith("//")) {
-                                pic = "https:" + pic;
-                            }
-
-                            String durationStr = "";
-                            if (itemObj.has("duration")) {
-                                try {
-                                    long duration = itemObj.get("duration").getAsLong();
-                                    durationStr = String.format("%02d:%02d", duration / 60, duration % 60);
-                                } catch (Exception e) {
-                                    durationStr = itemObj.get("duration").getAsString();
-                                }
-                            }
-
-                            vodJson.addProperty("vod_id", vodId);
-                            vodJson.addProperty("vod_name", title);
-                            vodJson.addProperty("vod_pic", pic);
-                            vodJson.addProperty("vod_remarks", durationStr);
-
-                            Vod vod = gson.fromJson(vodJson, Vod.class);
-                            if (vod != null) {
-                                list.add(vod);
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable t) {
-                com.github.catvod.crawler.SpiderDebug.log("===[Bili Home Error] " + t.getMessage());
-            }
-        }
-
+        for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList())) list.add(item.getVod());
         return Result.string(list);
     }
     
