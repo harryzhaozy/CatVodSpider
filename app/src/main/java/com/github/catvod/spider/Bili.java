@@ -613,7 +613,7 @@ if (extend != null && extend.containsKey("tid")) {
     tid = tid + " " + extend.get("tid");
 }
 //正常处理
-String api = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&keyword=" 
+String api = "https://api.bilibili.com/x/web-interface/"+login ? "wbi/" : ""+"search/type?search_type=video&keyword=" 
            + URLEncoder.encode(tid, "UTF-8") 
            + "&order=" + order 
            + "&duration=" + duration 
