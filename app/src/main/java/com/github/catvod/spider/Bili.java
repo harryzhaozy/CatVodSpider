@@ -605,26 +605,37 @@ private void stopPolling() {
         }
 
         //正常处理其他        
-        String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
-        String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
-        if (extend != null && extend.containsKey("tid")) {
-            tid = tid + " " + extend.get("tid");
-        }
-        String api = "https://api.bilibili.com/x/web-interface/"+(login ? "wbi/" : "")+"search/type?search_type=video&keyword=" 
-           + URLEncoder.encode(tid, "UTF-8") 
-           + "&order=" + order 
-           + "&duration=" + duration 
-           + "&page=" + pg;
-        String json = OkHttp.string(api, getHeader());
-        Resp resp = Resp.objectFrom(json);
-        List<Vod> list = new ArrayList<>();
-        for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
-            if (!TextUtils.isEmpty(item.getBvId())) {
-                list.add(item.getVod());
-            }
-        }
+        if (tid.endsWith("/{pg}")) {
+            LinkedHashMap<String, Object> params = new LinkedHashMap<>();
+            params.put("mid", tid.split("/")[0]);
+            params.put("pn", pg);
+            List<Vod> list = new ArrayList<>();
+            String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeader());
+            for (Resp.Result item : Resp.Result.arrayFrom(Resp.objectFrom(json).getData().getList().getAsJsonObject().get("vlist"))) list.add(item.getVod());
+            return Result.string(list);
+        } 
+        else {
+         String order = (extend != null && extend.containsKey("order")) ? extend.get("order") : "totalrank";
+       	 String duration = (extend != null && extend.containsKey("duration")) ? extend.get("duration") : "0";
+       	 if (extend != null && extend.containsKey("tid")) {
+            		tid = tid + " " + extend.get("tid");
+        	}
+        	String api = "https://api.bilibili.com/x/web-interface/"+(login ? "wbi/" : "")+"search/type?search_type=video&keyword=" 
+           		+ URLEncoder.encode(tid, "UTF-8") 
+           		+ "&order=" + order 
+           		+ "&duration=" + duration 
+           		+ "&page=" + pg;
+        	String json = OkHttp.string(api, getHeader());
+        	Resp resp = Resp.objectFrom(json);
+        	List<Vod> list = new ArrayList<>();
+        	for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getResult())) {
+            		if (!TextUtils.isEmpty(item.getBvId())) {
+                		list.add(item.getVod());
+            		}
+        	}
 
         return Result.string(list); 
+        }
     }
 
 @Override
