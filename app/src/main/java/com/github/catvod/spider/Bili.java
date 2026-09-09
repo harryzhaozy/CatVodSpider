@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Bili extends Spider {
 
-    private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc; bsource=search_baidu; _uuid=DE810E367-B52C-AF6E-A612-EDF4C31567F358591infoc; buvid_fp=711a632b5c876fa8bbcf668c1efba551; bp_t_offset_55423440=1203047221809905664;b_lsid=BEB8EE7F_18742FF8C2E";
+    private static final String COOKIE = "buvid3=7238A82F-D821-D23A-FAA5-ADC19C9796B458050infoc;bsource=search_baidu;_uuid=628F6D84-DF8D-ED5A-E4BF-66219979424B58395infoc;  buvid_fp=f7761c3c9bde36415f0299493c60b971;bp_t_offset_55423440=1203047221809905664;b_lsid=C1568F05_19E3B3AD0DE";
     private static String cookie;
 
     private JsonObject extend;
