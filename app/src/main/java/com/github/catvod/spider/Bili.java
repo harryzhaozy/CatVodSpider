@@ -77,7 +77,7 @@ public class Bili extends Spider {
         headers.put("Referer", "https://www.bilibili.com/");
         if (cookie != null) headers.put("cookie", cookie);
         headers.put("origin", "https://www.bilibili.com");
-        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36");
+        headers.put("User-Agent", Util.CHROME);
         return headers;
     }
 
