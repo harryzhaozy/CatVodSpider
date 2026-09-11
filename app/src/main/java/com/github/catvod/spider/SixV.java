@@ -92,21 +92,20 @@ public class SixV extends Spider {
     private JSONArray parseVodListFromDoc(String html) throws Exception {
     JSONArray videos = new JSONArray();
 
-    // 1. 调试：验证传入的 HTML 状态
-    if (html == null || html.isEmpty()) {
-        SpiderDebug.log("---- [SixV Debug] 输入的 HTML 源码为空或 null！");
-        return videos;
-    }
-    SpiderDebug.log("---- [SixV Debug] 成功拿到 HTML 源码，字符长度为: " + html.length());
-
+    // 1. 将整个方法的主体完全包裹在 try 块中，防止漏网之鱼
     try {
+        if (html == null || html.isEmpty()) {
+            SpiderDebug.log("---- [SixV Debug] 输入的 HTML 源码为空或 null！");
+            return videos;
+        }
+        SpiderDebug.log("---- [SixV Debug] 成功拿到 HTML 源码，字符长度为: " + html.length());
+
         Document doc = Jsoup.parse(html);
 
-        // 2. 调试：检测 DOM 节点匹配数量
+        // 2. 检测 DOM 节点匹配数量
         Elements items = doc.select("#post_container [class=zoom]");
         SpiderDebug.log("---- [SixV Debug] 选择器 [#post_container [class=zoom]] 匹配到的节点数量: " + items.size());
 
-        // 如果未匹配到，尝试备用选择器并打印提示
         if (items.isEmpty()) {
             items = doc.select("#post_container .zoom");
             SpiderDebug.log("---- [SixV Debug] 备用选择器 [#post_container .zoom] 匹配到的节点数量: " + items.size());
@@ -116,23 +115,19 @@ public class SixV extends Spider {
         for (Element item : items) {
             index++;
             try {
-                // 提取属性值
                 String vodId = item.attr("href");
                 String rawTitle = item.attr("title");
                 String name = removeHtmlTag(rawTitle);
                 
-                // 调试：单独提取图片节点并验证
                 Elements imgElements = item.select("img");
                 String pic = imgElements.attr("src");
 
-                // 3. 调试：输出单条数据解析详情
                 SpiderDebug.log("---- [SixV Debug] 条目 [" + index + "] 详情:");
                 SpiderDebug.log("       └─ 原始Title: " + rawTitle);
                 SpiderDebug.log("       └─ 过滤后Name: " + name);
                 SpiderDebug.log("       └─ 影片ID(href): " + vodId);
                 SpiderDebug.log("       └─ 图片节点数量: " + imgElements.size() + " | 图片src: " + pic);
 
-                // 判空过滤（避免解析出无效节点）
                 if (vodId == null || vodId.isEmpty()) {
                     SpiderDebug.log("---- [SixV Warning] 条目 [" + index + "] vod_id 为空，已跳过此数据");
                     continue;
@@ -145,18 +140,17 @@ public class SixV extends Spider {
                 vod.put("vod_remarks", "");
                 videos.put(vod);
 
-            } catch (Exception innerExp) {
-                // 单条条目解析防护，打印错误信息但不打断循环
-                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析时发生异常: " + innerExp.getMessage());
+            } catch (Throwable innerExp) {
+                // 使用 Throwable 捕获包含 NoClassDefFoundError 在内的所有错误，并输出具体堆栈
+                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析异常: " + android.util.Log.getStackTraceString(innerExp));
             }
         }
 
-        // 4. 调试：最终生成的 JSONArray 结果
         SpiderDebug.log("---- [SixV Debug] 全页解析完毕，最终有效视频数量: " + videos.length());
 
-    } catch (Exception e) {
-        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 解析过程发生严重崩溃: " + e.getMessage());
-        throw e; // 抛出异常供上层捕获
+    } catch (Throwable e) {
+        // 打印完整的错误堆栈，而不仅仅是 e.getMessage()
+        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 发生严重的崩溃:\n" + android.util.Log.getStackTraceString(e));
     }
 
     return videos;
