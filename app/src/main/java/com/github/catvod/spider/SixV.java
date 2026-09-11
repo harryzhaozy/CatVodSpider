@@ -89,32 +89,53 @@ public class SixV extends Spider {
         return m.find() ? m.group(1).trim() : "";
     }
 
-    private JSONArray parseVodListFromDoc(String html) {
+    private JSONArray parseVodListFromDoc(String html) throws Exception {
     JSONArray videos = new JSONArray();
-    if (html == null || html.isEmpty()) return videos;
+
+    // 1. 调试：验证传入的 HTML 状态
+    if (html == null || html.isEmpty()) {
+        SpiderDebug.log("---- [SixV Debug] 输入的 HTML 源码为空或 null！");
+        return videos;
+    }
+    SpiderDebug.log("---- [SixV Debug] 成功拿到 HTML 源码，字符长度为: " + html.length());
 
     try {
-        // 使用正则直接匹配 6V 列表项的 HTML 结构，彻底绕过 Jsoup 库
-        // 匹配模式：<a class="zoom" ... href="链接" ... title="标题"><img ... src="图片" ...>
-        Pattern p = Pattern.compile("<a[^>]*class=[\"']zoom[\"'][^>]*href=[\"']([^\"']+)[\"'][^>]*title=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)</a>");
-        Matcher m = p.matcher(html);
+        Document doc = Jsoup.parse(html);
 
-        while (m.find()) {
+        // 2. 调试：检测 DOM 节点匹配数量
+        Elements items = doc.select("#post_container [class=zoom]");
+        SpiderDebug.log("---- [SixV Debug] 选择器 [#post_container [class=zoom]] 匹配到的节点数量: " + items.size());
+
+        // 如果未匹配到，尝试备用选择器并打印提示
+        if (items.isEmpty()) {
+            items = doc.select("#post_container .zoom");
+            SpiderDebug.log("---- [SixV Debug] 备用选择器 [#post_container .zoom] 匹配到的节点数量: " + items.size());
+        }
+
+        int index = 0;
+        for (Element item : items) {
+            index++;
             try {
-                String vodId = m.group(1);
-                String name = m.group(2);
-                String innerHtml = m.group(3);
+                // 提取属性值
+                String vodId = item.attr("href");
+                String rawTitle = item.attr("title");
+                String name = removeHtmlTag(rawTitle);
+                
+                // 调试：单独提取图片节点并验证
+                Elements imgElements = item.select("img");
+                String pic = imgElements.attr("src");
 
-                // 从 <a> 内部提取 <img> 的 src
-                String pic = "";
-                Matcher imgMatcher = Pattern.compile("<img[^>]*src=[\"']([^\"']+)[\"']").matcher(innerHtml);
-                if (imgMatcher.find()) {
-                    pic = imgMatcher.group(1);
-                }
+                // 3. 调试：输出单条数据解析详情
+                SpiderDebug.log("---- [SixV Debug] 条目 [" + index + "] 详情:");
+                SpiderDebug.log("       └─ 原始Title: " + rawTitle);
+                SpiderDebug.log("       └─ 过滤后Name: " + name);
+                SpiderDebug.log("       └─ 影片ID(href): " + vodId);
+                SpiderDebug.log("       └─ 图片节点数量: " + imgElements.size() + " | 图片src: " + pic);
 
-                // 规则清理
-                if (name != null) {
-                    name = name.replaceAll("<[^>]*>", "").trim();
+                // 判空过滤（避免解析出无效节点）
+                if (vodId == null || vodId.isEmpty()) {
+                    SpiderDebug.log("---- [SixV Warning] 条目 [" + index + "] vod_id 为空，已跳过此数据");
+                    continue;
                 }
 
                 JSONObject vod = new JSONObject();
@@ -124,15 +145,18 @@ public class SixV extends Spider {
                 vod.put("vod_remarks", "");
                 videos.put(vod);
 
-            } catch (Throwable inner) {
-                // 忽略单条提取异常
+            } catch (Exception innerExp) {
+                // 单条条目解析防护，打印错误信息但不打断循环
+                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析时发生异常: " + innerExp.getMessage());
             }
         }
-        
-        SpiderDebug.log("---- [SixV Debug] 正则安全解析完成，提取到 " + videos.length() + " 条数据");
 
-    } catch (Throwable t) {
-        SpiderDebug.log("---- [SixV FATAL ERROR] 正则解析异常: " + t.getMessage());
+        // 4. 调试：最终生成的 JSONArray 结果
+        SpiderDebug.log("---- [SixV Debug] 全页解析完毕，最终有效视频数量: " + videos.length());
+
+    } catch (Exception e) {
+        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 解析过程发生严重崩溃: " + e.getMessage());
+        throw e; // 抛出异常供上层捕获
     }
 
     return videos;
