@@ -250,8 +250,15 @@ public class SixV extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        String cateUrl = siteUrl + "/" + tid;
-        if (!pg.equals("1")) cateUrl += "/index_" + pg + ".html";
+        //String cateUrl = siteUrl + "/" + tid;
+        //if (!pg.equals("1")) cateUrl += "/index_" + pg + ".html";
+        if (tid.startsWith("/")) tid = tid.substring(1);
+        if (tid.endsWith("/")) tid = tid.substring(0, tid.length() - 1);
+        // 拼出一次到位的规范 URL（末尾带 /）
+        String cateUrl = siteUrl + "/" + tid + "/";
+        if (!pg.equals("1")) {
+            cateUrl += "index_" + pg + ".html";
+        }
         String html = req(cateUrl, getHeader());
         JSONArray videos = parseVodListFromDoc(html);
         int page = Integer.parseInt(pg), count = 999, limit = videos.length(), total = Integer.MAX_VALUE;
