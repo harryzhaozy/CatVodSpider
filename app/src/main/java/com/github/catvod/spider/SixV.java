@@ -90,23 +90,52 @@ public class SixV extends Spider {
     }
 
     private JSONArray parseVodListFromDoc(String html) throws Exception {
-        JSONArray videos = new JSONArray();
-        Elements items = Jsoup.parse(html).select("#post_container [class=zoom]");
-        for (Element item : items) {
-            String vodId = item.attr("href");
-            String name = removeHtmlTag(item.attr("title"));
-            String pic = item.select("img").attr("src");
-            String remark = "";
+    JSONArray videos = new JSONArray();
+    if (TextUtils.isEmpty(html)) return videos;
+
+    Document doc = Jsoup.parse(html);
+    // 使用 .zoom 替换 [class=zoom]，兼容性更好
+    Elements items = doc.select("#post_container .zoom");
+    
+    // 如果 .zoom 没选到，降级匹配普通列表项
+    if (items.isEmpty()) {
+        items = doc.select("#post_container li");
+    }
+
+    for (Element item : items) {
+        try {
+            // 判空保护 1：获取 a 标签
+            Element a = item.tagName().equalsIgnoreCase("a") ? item : item.selectFirst("a");
+            if (a == null) continue;
+
+            String vodId = a.attr("href");
+            if (TextUtils.isEmpty(vodId)) continue;
+
+            String name = removeHtmlTag(a.attr("title"));
+            if (TextUtils.isEmpty(name)) {
+                name = a.text();
+            }
+
+            // 判空保护 2：图片标签严格判空，防止 NullPointerException
+            String pic = "";
+            Element img = item.selectFirst("img");
+            if (img != null) {
+                pic = img.hasAttr("src") ? img.attr("src") : img.attr("data-original");
+            }
 
             JSONObject vod = new JSONObject();
             vod.put("vod_id", vodId);
-            vod.put("vod_name", name);
-            vod.put("vod_pic", pic);
-            vod.put("vod_remarks", remark);
+            vod.put("vod_name", name != null ? name : "");
+            vod.put("vod_pic", pic != null ? pic : "");
+            vod.put("vod_remarks", "");
             videos.put(vod);
+        } catch (Exception e) {
+            // 单条数据解析失败时跳过，防止整页崩溃
+            SpiderDebug.log("parseVodItem Error: " + e.getMessage());
         }
-        return videos;
     }
+    return videos;
+}
 
     private String getActor(String html) {
         String actor = find(Pattern.compile("◎演　　员　(.*?)</p>"), html);
