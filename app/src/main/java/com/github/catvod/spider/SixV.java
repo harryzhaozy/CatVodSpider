@@ -91,46 +91,21 @@ public class SixV extends Spider {
 
     private JSONArray parseVodListFromDoc(String html) {
     JSONArray videos = new JSONArray();
-    
-    try {
-        SpiderDebug.log("---- [SixV Debug] 步骤1: 检查输入");
-        if (html == null || html.isEmpty()) return videos;
-
-        SpiderDebug.log("---- [SixV Debug] 步骤2: 准备执行 Jsoup.parse");
-        Document doc = Jsoup.parse(html); // 👈 关注这里是否打印成功
-
-        SpiderDebug.log("---- [SixV Debug] 步骤3: Jsoup.parse 成功，准备 select");
-        Elements items = doc.select("#post_container .zoom");
-
-        SpiderDebug.log("---- [SixV Debug] 步骤4: select 匹配数量 = " + items.size());
-        
+        Elements items = Jsoup.parse(html).select("#post_container [class=zoom]");
         for (Element item : items) {
             String vodId = item.attr("href");
-            String rawTitle = item.hasAttr("title") ? item.attr("title") : "";
-            String name = removeHtmlTag(rawTitle);
-            
-            String pic = "";
-            Elements img = item.select("img");
-            if (!img.isEmpty()) {
-                pic = img.attr("src");
-            }
+            String name = removeHtmlTag(item.attr("title"));
+            String pic = item.select("img").attr("src");
+            String remark = "";
 
             JSONObject vod = new JSONObject();
             vod.put("vod_id", vodId);
             vod.put("vod_name", name);
             vod.put("vod_pic", pic);
-            vod.put("vod_remarks", "");
+            vod.put("vod_remarks", remark);
             videos.put(vod);
         }
-
-    } catch (Throwable t) {
-        // 关键：同时输出 异常类名(t.getClass().getName()) 和 详细信息(t.toString())
-        SpiderDebug.log("---- [SixV FATAL ERROR] 崩溃类型: " + t.getClass().getName());
-        SpiderDebug.log("---- [SixV FATAL ERROR] 崩溃详情: " + t.toString());
-        SpiderDebug.log("---- [SixV FATAL ERROR] 堆栈信息:\n" + android.util.Log.getStackTraceString(t));
-    }
-
-    return videos;
+        return videos;
 }
 
     private String getActor(String html) {
