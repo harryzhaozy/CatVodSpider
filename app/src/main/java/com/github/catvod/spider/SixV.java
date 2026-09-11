@@ -51,7 +51,7 @@ public class SixV extends Spider {
     }
 
     private Response req(Request request) throws Exception {
-        return OkHttp.newCall(request).execute();
+        return OkHttp.newCall(request);
     }
 
     private String req(Response response) throws Exception {
