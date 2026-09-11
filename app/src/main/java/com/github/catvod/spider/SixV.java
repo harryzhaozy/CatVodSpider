@@ -89,7 +89,7 @@ public class SixV extends Spider {
         return m.find() ? m.group(1).trim() : "";
     }
 
-    private JSONArray parseVodListFromDoc(String html) {
+    private JSONArray parseVodListFromDoc (String html) throws Exception {
     JSONArray videos = new JSONArray();
         Elements items = Jsoup.parse(html).select("#post_container [class=zoom]");
         for (Element item : items) {
