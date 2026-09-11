@@ -157,6 +157,7 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
         setCookie();
+        checkLogin();
         
     }
 
