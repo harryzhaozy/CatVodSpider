@@ -89,68 +89,45 @@ public class SixV extends Spider {
         return m.find() ? m.group(1).trim() : "";
     }
 
-    private JSONArray parseVodListFromDoc(String html) throws Exception {
+    private JSONArray parseVodListFromDoc(String html) {
     JSONArray videos = new JSONArray();
-
-    // 1. 将整个方法的主体完全包裹在 try 块中，防止漏网之鱼
+    
     try {
-        if (html == null || html.isEmpty()) {
-            SpiderDebug.log("---- [SixV Debug] 输入的 HTML 源码为空或 null！");
-            return videos;
-        }
-        SpiderDebug.log("---- [SixV Debug] 成功拿到 HTML 源码，字符长度为: " + html.length());
+        SpiderDebug.log("---- [SixV Debug] 步骤1: 检查输入");
+        if (html == null || html.isEmpty()) return videos;
 
-        Document doc = Jsoup.parse(html);
+        SpiderDebug.log("---- [SixV Debug] 步骤2: 准备执行 Jsoup.parse");
+        Document doc = Jsoup.parse(html); // 👈 关注这里是否打印成功
 
-        // 2. 检测 DOM 节点匹配数量
-        Elements items = doc.select("#post_container [class=zoom]");
-        SpiderDebug.log("---- [SixV Debug] 选择器 [#post_container [class=zoom]] 匹配到的节点数量: " + items.size());
+        SpiderDebug.log("---- [SixV Debug] 步骤3: Jsoup.parse 成功，准备 select");
+        Elements items = doc.select("#post_container .zoom");
 
-        if (items.isEmpty()) {
-            items = doc.select("#post_container .zoom");
-            SpiderDebug.log("---- [SixV Debug] 备用选择器 [#post_container .zoom] 匹配到的节点数量: " + items.size());
-        }
-
-        int index = 0;
+        SpiderDebug.log("---- [SixV Debug] 步骤4: select 匹配数量 = " + items.size());
+        
         for (Element item : items) {
-            index++;
-            try {
-                String vodId = item.attr("href");
-                String rawTitle = item.attr("title");
-                String name = removeHtmlTag(rawTitle);
-                
-                Elements imgElements = item.select("img");
-                String pic = imgElements.attr("src");
-
-                SpiderDebug.log("---- [SixV Debug] 条目 [" + index + "] 详情:");
-                SpiderDebug.log("       └─ 原始Title: " + rawTitle);
-                SpiderDebug.log("       └─ 过滤后Name: " + name);
-                SpiderDebug.log("       └─ 影片ID(href): " + vodId);
-                SpiderDebug.log("       └─ 图片节点数量: " + imgElements.size() + " | 图片src: " + pic);
-
-                if (vodId == null || vodId.isEmpty()) {
-                    SpiderDebug.log("---- [SixV Warning] 条目 [" + index + "] vod_id 为空，已跳过此数据");
-                    continue;
-                }
-
-                JSONObject vod = new JSONObject();
-                vod.put("vod_id", vodId);
-                vod.put("vod_name", name != null ? name : "");
-                vod.put("vod_pic", pic != null ? pic : "");
-                vod.put("vod_remarks", "");
-                videos.put(vod);
-
-            } catch (Throwable innerExp) {
-                // 使用 Throwable 捕获包含 NoClassDefFoundError 在内的所有错误，并输出具体堆栈
-                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析异常: " + android.util.Log.getStackTraceString(innerExp));
+            String vodId = item.attr("href");
+            String rawTitle = item.hasAttr("title") ? item.attr("title") : "";
+            String name = removeHtmlTag(rawTitle);
+            
+            String pic = "";
+            Elements img = item.select("img");
+            if (!img.isEmpty()) {
+                pic = img.attr("src");
             }
+
+            JSONObject vod = new JSONObject();
+            vod.put("vod_id", vodId);
+            vod.put("vod_name", name);
+            vod.put("vod_pic", pic);
+            vod.put("vod_remarks", "");
+            videos.put(vod);
         }
 
-        SpiderDebug.log("---- [SixV Debug] 全页解析完毕，最终有效视频数量: " + videos.length());
-
-    } catch (Throwable e) {
-        // 打印完整的错误堆栈，而不仅仅是 e.getMessage()
-        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 发生严重的崩溃:\n" + android.util.Log.getStackTraceString(e));
+    } catch (Throwable t) {
+        // 关键：同时输出 异常类名(t.getClass().getName()) 和 详细信息(t.toString())
+        SpiderDebug.log("---- [SixV FATAL ERROR] 崩溃类型: " + t.getClass().getName());
+        SpiderDebug.log("---- [SixV FATAL ERROR] 崩溃详情: " + t.toString());
+        SpiderDebug.log("---- [SixV FATAL ERROR] 堆栈信息:\n" + android.util.Log.getStackTraceString(t));
     }
 
     return videos;
