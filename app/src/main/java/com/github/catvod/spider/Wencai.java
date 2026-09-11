@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 import java.util.*;
 
 public class Wencai extends Spider {
-    private static final String HOST = "https://www.hkybqufgh.com";
+    private static final String HOST = "https://yvyeigh.com";  // "https://www.hkybqufgh.com";
     private static final String KEY = "cb808529bae6b6be45ecfab29a4889bc";
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
