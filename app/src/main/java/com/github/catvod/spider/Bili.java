@@ -156,19 +156,7 @@ public class Bili extends Spider {
             SpiderDebug.log("===[Bili Init Error] " + e.getMessage());
         }
         setCookie();
-        if(checkNeedRefreshCookie())
-        {
-            Init.run(() -> {
-                Toast.makeText(context, "需要刷新Cookie!", Toast.LENGTH_SHORT).show();
-                });
-        }
-        checkLogin();
-        if(!this.login)
-        {
-            Init.run(() -> {
-                Toast.makeText(context, "末登录，登录B站后看高清画质！", Toast.LENGTH_SHORT).show();
-                });
-        }
+        
     }
 
     private void checkLogin() {
@@ -549,6 +537,19 @@ public class Bili extends Spider {
 
     @Override
     public String homeVideoContent() {
+        if(checkNeedRefreshCookie())
+        {
+            Init.run(() -> {
+                Toast.makeText(context, "需要刷新Cookie!", Toast.LENGTH_SHORT).show();
+                });
+        }
+        checkLogin();
+        if(!this.login)
+        {
+            Init.run(() -> {
+                Toast.makeText(context, "末登录，登录B站后看高清画质！", Toast.LENGTH_SHORT).show();
+                });
+        }
         String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
         String json = OkHttp.string(api, getHeader());
         Resp resp = Resp.objectFrom(json);
