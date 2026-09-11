@@ -91,66 +91,31 @@ public class SixV extends Spider {
 
     private JSONArray parseVodListFromDoc(String html) {
     JSONArray videos = new JSONArray();
-
-    // 调试 1：检查传入的 HTML 状态
-    if (html == null || html.isEmpty()) {
-        SpiderDebug.log("---- [SixV Debug] HTML 为空或 null！");
-        return videos;
-    }
-    SpiderDebug.log("---- [SixV Debug] 成功获取 HTML，长度: " + html.length());
+    if (html == null || html.isEmpty()) return videos;
 
     try {
-        Document doc = Jsoup.parse(html);
+        // 使用正则直接匹配 6V 列表项的 HTML 结构，彻底绕过 Jsoup 库
+        // 匹配模式：<a class="zoom" ... href="链接" ... title="标题"><img ... src="图片" ...>
+        Pattern p = Pattern.compile("<a[^>]*class=[\"']zoom[\"'][^>]*href=[\"']([^\"']+)[\"'][^>]*title=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)</a>");
+        Matcher m = p.matcher(html);
 
-        // 调试 2：检查 Jsoup 解析后的 DOM 匹配节点
-        Elements items = doc.select("#post_container .zoom");
-        SpiderDebug.log("---- [SixV Debug] 使用 selector [#post_container .zoom] 匹配节点数量: " + items.size());
-
-        // 降级选择器备用
-        if (items.isEmpty()) {
-            items = doc.select("#post_container li");
-            SpiderDebug.log("---- [SixV Debug] 降级使用 selector [#post_container li] 匹配节点数量: " + items.size());
-        }
-
-        int index = 0;
-        for (Element item : items) {
-            index++;
+        while (m.find()) {
             try {
-                // 1. 获取 a 标签
-                Element a = item.tagName().equalsIgnoreCase("a") ? item : item.selectFirst("a");
-                if (a == null) {
-                    SpiderDebug.log("---- [SixV Debug] 第 " + index + " 个节点未找到 <a> 标签，跳过");
-                    continue;
+                String vodId = m.group(1);
+                String name = m.group(2);
+                String innerHtml = m.group(3);
+
+                // 从 <a> 内部提取 <img> 的 src
+                String pic = "";
+                Matcher imgMatcher = Pattern.compile("<img[^>]*src=[\"']([^\"']+)[\"']").matcher(innerHtml);
+                if (imgMatcher.find()) {
+                    pic = imgMatcher.group(1);
                 }
 
-                String vodId = a.attr("href");
-                if (vodId == null || vodId.isEmpty()) {
-                    SpiderDebug.log("---- [SixV Debug] 第 " + index + " 个节点 <a> 标签无 href 属性，跳过");
-                    continue;
-                }
-
-                // 2. 提取名称 (不调用第三方工具类，防止触发 ThreadLocal 崩溃)
-                String name = a.attr("title");
-                if (name == null || name.trim().isEmpty()) {
-                    name = a.text();
-                }
+                // 规则清理
                 if (name != null) {
                     name = name.replaceAll("<[^>]*>", "").trim();
                 }
-
-                // 3. 严格判空提取图片 URL
-                String pic = "";
-                Element img = item.selectFirst("img");
-                if (img != null) {
-                    if (img.hasAttr("src")) {
-                        pic = img.attr("src");
-                    } else if (img.hasAttr("data-original")) {
-                        pic = img.attr("data-original");
-                    }
-                }
-
-                // 调试 3：打印提取到的单条有效数据
-                SpiderDebug.log("---- [SixV Debug] 解析成功 [" + index + "]: 名称=" + name + " | ID=" + vodId + " | 图片=" + pic);
 
                 JSONObject vod = new JSONObject();
                 vod.put("vod_id", vodId);
@@ -159,20 +124,15 @@ public class SixV extends Spider {
                 vod.put("vod_remarks", "");
                 videos.put(vod);
 
-            } catch (Throwable innerError) {
-                // 捕获单条数据解析异常（例如个别 Element 为 null 或底层 API 缺失）
-                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析时发生崩溃: " + innerError.getClass().getName() + " - " + innerError.getMessage());
+            } catch (Throwable inner) {
+                // 忽略单条提取异常
             }
         }
-
-        SpiderDebug.log("---- [SixV Debug] 解析完成，共生成 " + videos.length() + " 条视频数据");
+        
+        SpiderDebug.log("---- [SixV Debug] 正则安全解析完成，提取到 " + videos.length() + " 条数据");
 
     } catch (Throwable t) {
-        // 调试 4：全局拦截 Android 6.0 的 NoSuchMethodError 或其他严重错误
-        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 发生严重崩溃: " + t.getClass().getName() + " - " + t.getMessage());
-        for (StackTraceElement ste : t.getStackTrace()) {
-            SpiderDebug.log("    at " + ste.toString());
-        }
+        SpiderDebug.log("---- [SixV FATAL ERROR] 正则解析异常: " + t.getMessage());
     }
 
     return videos;
