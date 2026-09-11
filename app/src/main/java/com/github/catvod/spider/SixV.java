@@ -271,7 +271,7 @@ public class SixV extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        String searchUrl = siteUrl + "/e/search/1index.php";
+        String searchUrl = siteUrl + "/e/search/11index.php";
         String html = "";
         if ("1".equals(pg)) {
             String formData = "show=title&tempid=1&tbname=article&mid=1&dopost=search&submit=&keyboard=" + URLEncoder.encode(key, "UTF-8");
