@@ -61,9 +61,9 @@ public class SixV extends Spider {
         return content;
     }
 
-    private OkHttpClient okClient() {
-        return OkHttp.client();
-    }
+   // private OkHttpClient okClient() {
+   //     return OkHttp.client();
+   // }
 
     private Map<String, String> getHeader() {
         Map<String, String> header = new HashMap<>();
