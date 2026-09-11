@@ -1,5 +1,4 @@
 package com.github.catvod.spider;
-
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -11,7 +10,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Danmaku;
 import com.github.catvod.bean.Filter;
@@ -33,9 +31,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
-
 import com.github.catvod.utils.QRCode;
-
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.URLEncoder;
@@ -62,13 +58,11 @@ public class Bili extends Spider {
 
     private static final String COOKIE = "buvid3=8B57D3BA-607A-1E85-018A-E8C430023CED42659infoc";
     private static String cookie;
-
     private JsonObject extend;
     private boolean login;
     private boolean isVip;
     private Wbi wbi;
     private Context mContext;
-
     private AlertDialog qrDialog;
     private ScheduledExecutorService pollScheduler;
 
@@ -180,11 +174,9 @@ public class Bili extends Spider {
     private void checkLogin() {
     try {
         String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeader());
-        
-        // 1. 安全过滤：返回为空，或者包含 412/HTML 拦截页时，跳过解析，保留原有本地 Cookie 登录态
+
         if (json == null || json.isEmpty() || json.contains("412") || json.contains("JavaScript") || !json.trim().startsWith("{")) {
-            SpiderDebug.log("===[Bili Status] 接口返回非 JSON 数据(可能风控拦截)，保留本地登录态: " + json);
-            // 本地如果含有 SESSDATA，默认保留登录状态，防止被风控误杀
+            
             if (!TextUtils.isEmpty(this.cookie) && this.cookie.contains("SESSDATA")) {
                 this.login = true;
             }
@@ -268,13 +260,11 @@ public class Bili extends Spider {
                 builder.setTitle("Bilibili 账号配置");
                 builder.setMessage(statusTip);
 
-                // 按钮1：扫码登录
                 builder.setPositiveButton("扫码登录", (dialog, which) -> {
                     dialog.dismiss();
                     startQrCodeLogin();
                 });
 
-                // 按钮2：清除 Cookie
                 builder.setNegativeButton("清除 Cookie", (dialog, which) -> {
                     clearCookie();
                     dialog.dismiss();
@@ -352,25 +342,20 @@ public class Bili extends Spider {
                 layout.setOrientation(LinearLayout.VERTICAL);
                 layout.setPadding(40, 40, 40, 40);
                 layout.setGravity(Gravity.CENTER);
-
                 TextView textView = new TextView(finalActivity);
                 textView.setText("请使用 Bilibili 手机客户端扫码登录");
                 textView.setTextSize(18);
                 textView.setTextColor(Color.BLACK);
                 textView.setPadding(0, 0, 0, 20);
                 textView.setGravity(Gravity.CENTER);
-
                 ImageView imageView = new ImageView(finalActivity);
                 imageView.setImageBitmap(bitmap);
-
                 layout.addView(textView);
                 layout.addView(imageView);
-
                 AlertDialog.Builder builder = new AlertDialog.Builder(finalActivity);
                 builder.setView(layout);
                 builder.setNegativeButton("取消扫码", (dialog, which) -> stopPolling());
                 builder.setOnDismissListener(dialog -> stopPolling());
-
                 qrDialog = builder.create();
                 qrDialog.show();
             } catch (Exception e) {
@@ -391,9 +376,6 @@ public class Bili extends Spider {
 
  private void startPolling(String qrcodeKey) {
     stopPolling();
-    //SpiderDebug.log("===[Bili Poll] 开始单接口（带 SSL 兼容）轮询，qrcodeKey: " + qrcodeKey);
-    
-    // 1. 初始化跳过证书校验的 TrustManager（兼容 Android 6.0 系统根证书过老问题）
     javax.net.ssl.SSLContext sslContext = null;
     javax.net.ssl.SSLSocketFactory sslSocketFactory = null;
     try {
@@ -423,7 +405,6 @@ public class Bili extends Spider {
                 java.net.URL url = new java.net.URL(pollApi);
                 conn = (java.net.HttpURLConnection) url.openConnection();
                 
-                // 2. 注入 SSL Socket Factory，彻底解决 CertPathValidatorException 报错
                 if (conn instanceof javax.net.ssl.HttpsURLConnection && finalSslSocketFactory != null) {
                     ((javax.net.ssl.HttpsURLConnection) conn).setSSLSocketFactory(finalSslSocketFactory);
                     ((javax.net.ssl.HttpsURLConnection) conn).setHostnameVerifier((hostname, session) -> true);
@@ -437,9 +418,6 @@ public class Bili extends Spider {
                 conn.setRequestProperty("origin", "https://www.bilibili.com");
                 conn.setRequestProperty("User-Agent", Util.CHROME);
                 
-                
-                
-                // 3. 读取响应体
                 java.io.InputStream in = conn.getInputStream();
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
                 StringBuilder response = new StringBuilder();
@@ -464,10 +442,8 @@ public class Bili extends Spider {
             int code = data.get("code").getAsInt();
             String message = data.has("message") ? data.get("message").getAsString() : "";
 
-            //SpiderDebug.log("===[Bili Poll] 轮询结果 code: " + code + " | msg: " + message);
-
             if (code == 0) { // 扫码登录成功！
-                //SpiderDebug.log("===[Bili Poll Success] 扫码成功，单接口自动截获 Set-Cookie，准备提取...");
+
                 stopPolling();
 
                 // 4. 从全局 CookieManager 提取这一次单接口请求下发的所有 Cookie
@@ -529,13 +505,13 @@ public class Bili extends Spider {
     }, 0, 2, TimeUnit.SECONDS);
 }
 
-private void stopPolling() {
-    if (pollScheduler != null && !pollScheduler.isShutdown()) {
-        pollScheduler.shutdownNow();
-        pollScheduler = null;
-        SpiderDebug.log("===[Bili Poll] 轮询线程池已停止");
+    private void stopPolling() {
+        if (pollScheduler != null && !pollScheduler.isShutdown()) {
+            pollScheduler.shutdownNow();
+            pollScheduler = null;
+            SpiderDebug.log("===[Bili Poll] 轮询线程池已停止");
+        }
     }
-}
 
 
     // ====================== 分类与业务逻辑 ======================
@@ -543,8 +519,6 @@ private void stopPolling() {
     public String action(String action)  {
 
         if ("show_settings".equals(action)) {
-
-            // 主线程调起登录/配置 Dialog
             Init.run(() -> {
                 try {
                     showPeizhiDialog();
@@ -645,11 +619,8 @@ public String detailContent(List<String> ids) throws Exception {
     }
 
     String id = ids.get(0);
-
-
     // ================= 2. 正常视频详情解析 =================
     if (!login) checkLogin();
-
     // 检查 ID 格式是否符合 bvid@aid 规范，防止分割溢出
     String[] split = id.split("@");
     if (split.length < 2) {
