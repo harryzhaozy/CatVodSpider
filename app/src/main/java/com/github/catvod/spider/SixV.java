@@ -89,51 +89,92 @@ public class SixV extends Spider {
         return m.find() ? m.group(1).trim() : "";
     }
 
-    private JSONArray parseVodListFromDoc(String html) throws Exception {
+    private JSONArray parseVodListFromDoc(String html) {
     JSONArray videos = new JSONArray();
-    if (TextUtils.isEmpty(html)) return videos;
 
-    Document doc = Jsoup.parse(html);
-    // 使用 .zoom 替换 [class=zoom]，兼容性更好
-    Elements items = doc.select("#post_container .zoom");
-    
-    // 如果 .zoom 没选到，降级匹配普通列表项
-    if (items.isEmpty()) {
-        items = doc.select("#post_container li");
+    // 调试 1：检查传入的 HTML 状态
+    if (html == null || html.isEmpty()) {
+        SpiderDebug.log("---- [SixV Debug] HTML 为空或 null！");
+        return videos;
     }
+    SpiderDebug.log("---- [SixV Debug] 成功获取 HTML，长度: " + html.length());
 
-    for (Element item : items) {
-        try {
-            // 判空保护 1：获取 a 标签
-            Element a = item.tagName().equalsIgnoreCase("a") ? item : item.selectFirst("a");
-            if (a == null) continue;
+    try {
+        Document doc = Jsoup.parse(html);
 
-            String vodId = a.attr("href");
-            if (TextUtils.isEmpty(vodId)) continue;
+        // 调试 2：检查 Jsoup 解析后的 DOM 匹配节点
+        Elements items = doc.select("#post_container .zoom");
+        SpiderDebug.log("---- [SixV Debug] 使用 selector [#post_container .zoom] 匹配节点数量: " + items.size());
 
-            String name = removeHtmlTag(a.attr("title"));
-            if (TextUtils.isEmpty(name)) {
-                name = a.text();
+        // 降级选择器备用
+        if (items.isEmpty()) {
+            items = doc.select("#post_container li");
+            SpiderDebug.log("---- [SixV Debug] 降级使用 selector [#post_container li] 匹配节点数量: " + items.size());
+        }
+
+        int index = 0;
+        for (Element item : items) {
+            index++;
+            try {
+                // 1. 获取 a 标签
+                Element a = item.tagName().equalsIgnoreCase("a") ? item : item.selectFirst("a");
+                if (a == null) {
+                    SpiderDebug.log("---- [SixV Debug] 第 " + index + " 个节点未找到 <a> 标签，跳过");
+                    continue;
+                }
+
+                String vodId = a.attr("href");
+                if (vodId == null || vodId.isEmpty()) {
+                    SpiderDebug.log("---- [SixV Debug] 第 " + index + " 个节点 <a> 标签无 href 属性，跳过");
+                    continue;
+                }
+
+                // 2. 提取名称 (不调用第三方工具类，防止触发 ThreadLocal 崩溃)
+                String name = a.attr("title");
+                if (name == null || name.trim().isEmpty()) {
+                    name = a.text();
+                }
+                if (name != null) {
+                    name = name.replaceAll("<[^>]*>", "").trim();
+                }
+
+                // 3. 严格判空提取图片 URL
+                String pic = "";
+                Element img = item.selectFirst("img");
+                if (img != null) {
+                    if (img.hasAttr("src")) {
+                        pic = img.attr("src");
+                    } else if (img.hasAttr("data-original")) {
+                        pic = img.attr("data-original");
+                    }
+                }
+
+                // 调试 3：打印提取到的单条有效数据
+                SpiderDebug.log("---- [SixV Debug] 解析成功 [" + index + "]: 名称=" + name + " | ID=" + vodId + " | 图片=" + pic);
+
+                JSONObject vod = new JSONObject();
+                vod.put("vod_id", vodId);
+                vod.put("vod_name", name != null ? name : "");
+                vod.put("vod_pic", pic != null ? pic : "");
+                vod.put("vod_remarks", "");
+                videos.put(vod);
+
+            } catch (Throwable innerError) {
+                // 捕获单条数据解析异常（例如个别 Element 为 null 或底层 API 缺失）
+                SpiderDebug.log("---- [SixV Error] 第 " + index + " 个条目解析时发生崩溃: " + innerError.getClass().getName() + " - " + innerError.getMessage());
             }
+        }
 
-            // 判空保护 2：图片标签严格判空，防止 NullPointerException
-            String pic = "";
-            Element img = item.selectFirst("img");
-            if (img != null) {
-                pic = img.hasAttr("src") ? img.attr("src") : img.attr("data-original");
-            }
+        SpiderDebug.log("---- [SixV Debug] 解析完成，共生成 " + videos.length() + " 条视频数据");
 
-            JSONObject vod = new JSONObject();
-            vod.put("vod_id", vodId);
-            vod.put("vod_name", name != null ? name : "");
-            vod.put("vod_pic", pic != null ? pic : "");
-            vod.put("vod_remarks", "");
-            videos.put(vod);
-        } catch (Exception e) {
-            // 单条数据解析失败时跳过，防止整页崩溃
-            SpiderDebug.log("parseVodItem Error: " + e.getMessage());
+    } catch (Throwable t) {
+        // 调试 4：全局拦截 Android 6.0 的 NoSuchMethodError 或其他严重错误
+        SpiderDebug.log("---- [SixV FATAL ERROR] parseVodListFromDoc 发生严重崩溃: " + t.getClass().getName() + " - " + t.getMessage());
+        for (StackTraceElement ste : t.getStackTrace()) {
+            SpiderDebug.log("    at " + ste.toString());
         }
     }
+
     return videos;
 }
 
