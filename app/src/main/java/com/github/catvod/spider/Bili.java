@@ -521,16 +521,18 @@ public class Bili extends Spider {
         return "其他";
     }
 
-    private void showToastOnMainThread(String text) {
-    Init.run(() -> {
-        try {
-            // 在主线程明确指定主线程 Looper
-            Toast toast = Toast.makeText(Init.context(), text, Toast.LENGTH_SHORT);
-            toast.show();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    });
+    private void showToast(String msg) {
+    
+        SpiderDebug.log("BiliSpider ---> 准备弹窗: " + msg);
+        // 强制在主线程弹窗
+        Init.run(() -> {
+            try {
+                Toast toast = Toast.makeText(Init.context(), msg, Toast.LENGTH_LONG);
+                toast.show();
+            } catch (Throwable e) {
+                SpiderDebug.log("BiliSpider ---> 弹窗失败: " + e.getMessage());
+            }
+        });
     }
     
     @Override
