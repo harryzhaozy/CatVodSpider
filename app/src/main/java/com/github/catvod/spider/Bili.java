@@ -556,12 +556,12 @@ public class Bili extends Spider {
         if (!hasShownToast) {
         if(checkNeedRefreshCookie())
         {
-            showToastOnMainThread("需要刷新Cookie!");
+            showToast("需要刷新Cookie!");
         }
         checkLogin();
         if(!this.login)
         {
-            showToastOnMainThread("未登录，登录B站后看高清画质！");
+            showToast("未登录，登录B站后看高清画质！");
         }
           hasShownToast = true;  
         }
