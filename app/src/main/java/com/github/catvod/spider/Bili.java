@@ -65,7 +65,7 @@ public class Bili extends Spider {
     private Context mContext;
     private AlertDialog qrDialog;
     private ScheduledExecutorService pollScheduler;
-    private static boolean hasShownToast = false;
+    
 
     private static Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
@@ -537,6 +537,17 @@ public class Bili extends Spider {
     
     @Override
     public String homeContent(boolean filter) throws Exception {
+        
+        if(checkNeedRefreshCookie())
+        {
+            showToast("需要刷新Cookie!");
+        }
+        checkLogin();
+        if(!this.login)
+        {
+            showToast("未登录，登录B站后看高清画质！");
+        }
+        
         if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
         List<Class> classes = new ArrayList<>();
         LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
@@ -553,18 +564,7 @@ public class Bili extends Spider {
 
     @Override
     public String homeVideoContent() {
-        if (!hasShownToast) {
-        if(checkNeedRefreshCookie())
-        {
-            showToast("需要刷新Cookie!");
-        }
-        checkLogin();
-        if(!this.login)
-        {
-            showToast("未登录，登录B站后看高清画质！");
-        }
-          hasShownToast = true;  
-        }
+        
         String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
         String json = OkHttp.string(api, getHeader());
         Resp resp = Resp.objectFrom(json);
