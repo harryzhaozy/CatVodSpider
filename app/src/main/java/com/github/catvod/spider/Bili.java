@@ -521,6 +521,18 @@ public class Bili extends Spider {
         return "其他";
     }
 
+    private void showToastOnMainThread(String text) {
+    Init.run(() -> {
+        try {
+            // 在主线程明确指定主线程 Looper
+            Toast toast = Toast.makeText(Init.context(), text, Toast.LENGTH_SHORT);
+            toast.show();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    });
+    }
+    
     @Override
     public String homeContent(boolean filter) throws Exception {
         if (extend != null && extend.has("json")) return OkHttp.string(extend.get("json").getAsString());
@@ -542,16 +554,12 @@ public class Bili extends Spider {
         if (!hasShownToast) {
         if(checkNeedRefreshCookie())
         {
-            Init.run(() -> {
-                Toast.makeText(Init.context(), "需要刷新Cookie!", Toast.LENGTH_SHORT).show();
-                });
+            showToastOnMainThread("需要刷新Cookie!");
         }
         checkLogin();
         if(!this.login)
         {
-            Init.run(() -> {
-                Toast.makeText(Init.context(), "末登录，登录B站后看高清画质！", Toast.LENGTH_SHORT).show();
-                });
+            showToastOnMainThread("未登录，登录B站后看高清画质！");
         }
           hasShownToast = true;  
         }
