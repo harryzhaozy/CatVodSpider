@@ -24,6 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.catvod.crawler.SpiderDebug;
+import android.util.Log;
 
 /**
  * 农民影视（域名改为旺旺有效域名）
