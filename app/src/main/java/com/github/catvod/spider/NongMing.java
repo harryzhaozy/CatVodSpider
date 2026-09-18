@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.github.catvod.crawler.SpiderDebug;
+
 /**
  * 农民影视（域名改为旺旺有效域名）
  */
@@ -90,6 +92,7 @@ public class NongMing extends Spider {
         JSONObject result = new JSONObject();
         result.put("class", classes);
         result.put("filters", filterConfig);
+        SpiderDebug.log("分类数据: "+result.toString());
         return result.toString();
     }
 
