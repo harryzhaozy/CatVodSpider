@@ -78,6 +78,7 @@ public class NongMing extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
+        try{
         JSONArray classes = new JSONArray();
         List<String> typeIds = Arrays.asList("1", "2", "3", "4");
         List<String> typeNames = Arrays.asList("电影", "电视剧", "综艺", "动漫");
@@ -94,6 +95,11 @@ public class NongMing extends Spider {
         result.put("filters", filterConfig);
         SpiderDebug.log("Spider Debug|分类数据: "+result.toString());
         return result.toString();
+        } catch (Throwable t) {
+        String errorMsg = Log.getStackTraceString(t);
+        SpiderDebug.log("Spider Debug|homeContent 发生错误: \n" + errorMsg);
+        return "";
+    }
     }
 
     @Override
