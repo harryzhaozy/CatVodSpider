@@ -92,7 +92,7 @@ public class NongMing extends Spider {
         JSONObject result = new JSONObject();
         result.put("class", classes);
         result.put("filters", filterConfig);
-        SpiderDebug.log("分类数据: "+result.toString());
+        SpiderDebug.log("Spider Debug|分类数据: "+result.toString());
         return result.toString();
     }
 
