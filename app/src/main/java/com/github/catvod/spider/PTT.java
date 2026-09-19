@@ -37,13 +37,27 @@ public class PTT extends Spider {
         return header;
     }
 
+    List<Vod> parseVods(Document doc) {
+        List<Vod> list = new ArrayList<>();
+        for (Element div : doc.select("div.card > div.embed-responsive")) {
+            Element a = div.select("a").get(0);
+            Element img = a.select("img").get(0);
+            String remark = div.select("span.badge.badge-success").get(0).text();
+            String src = img.attr("src");
+            String vodPic = src.startsWith("http") ? src : url + (src.startsWith("/") ? src.substring(1) : src);
+            String name = img.attr("alt");
+            if (!TextUtils.isEmpty(name)) list.add(new Vod(a.attr("href").substring(1), name, vodPic, remark));
+        }
+        return list;
+    }
+
     @Override
-    public void init(Context context, String extend) throws Exception {
+    public void init(Context context, String extend) {
         this.extend = extend;
     }
 
     @Override
-    public String homeContent(boolean filter) throws Exception {
+    public String homeContent(boolean filter) {
         Document doc = Jsoup.parse(OkHttp.string(url, getHeader()));
         List<Class> classes = new ArrayList<>();
         for (Element a : doc.select("li > a.px-2.px-sm-3.py-2.nav-link")) classes.add(new Class(a.attr("href").replace("/p/", ""), a.text()));
@@ -51,7 +65,7 @@ public class PTT extends Spider {
     }
 
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         Uri.Builder builder = Uri.parse(url + "p/" + tid).buildUpon();
         if (!TextUtils.isEmpty(extend.get("c"))) builder.appendEncodedPath("c/" + extend.get("c"));
         if (!TextUtils.isEmpty(extend.get("area"))) builder.appendQueryParameter("area_id", extend.get("area"));
@@ -59,20 +73,11 @@ public class PTT extends Spider {
         if (!TextUtils.isEmpty(extend.get("sort"))) builder.appendQueryParameter("sort", extend.get("sort"));
         builder.appendQueryParameter("page", pg);
         Document doc = Jsoup.parse(OkHttp.string(builder.toString(), getHeader()));
-        List<Vod> list = new ArrayList<>();
-        for (Element div : doc.select("div.card > div.embed-responsive")) {
-            Element a = div.select("a").get(0);
-            Element img = a.select("img").get(0);
-            String remark = div.select("span.badge.badge-success").get(0).text();
-            String vodPic = img.attr("src").startsWith("http") ? img.attr("src") : url + img.attr("src");
-            String name = img.attr("alt");
-            if (!TextUtils.isEmpty(name)) list.add(new Vod(a.attr("href").substring(3), name, vodPic, remark));
-        }
-        return Result.string(list);
+        return Result.string(parseVods(doc));
     }
 
     @Override
-    public String detailContent(List<String> ids) throws Exception {
+    public String detailContent(List<String> ids) {
         Document doc = Jsoup.parse(OkHttp.string(url + ids.get(0) + "/1", getHeader()));
         LinkedHashMap<String, String> flags = new LinkedHashMap<>();
         List<String> playUrls = new ArrayList<>();
@@ -93,29 +98,20 @@ public class PTT extends Spider {
     }
 
     @Override
-    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        Matcher m = Pattern.compile("contentUrl\":\"(.*?)\"").matcher(OkHttp.string(url + id));
+    public String playerContent(String flag, String id, List<String> vipFlags) {
+        Matcher m = Pattern.compile("contentUrl\":\"(.*?)\"").matcher(OkHttp.string(url + id, getHeader()));
         if (m.find()) return Result.get().url(m.group(1).replace("\\", "")).string();
         return Result.error("");
     }
 
     @Override
-    public String searchContent(String key, boolean quick) throws Exception {
+    public String searchContent(String key, boolean quick) {
         return searchContent(key, quick, "1");
     }
 
     @Override
-    public String searchContent(String key, boolean quick, String pg) throws Exception {
+    public String searchContent(String key, boolean quick, String pg) {
         Document doc = Jsoup.parse(OkHttp.string(url + String.format("q/%s?page=%s", key, pg), getHeader()));
-        List<Vod> list = new ArrayList<>();
-        for (Element div : doc.select("div.card > div.embed-responsive")) {
-            Element a = div.select("a").get(0);
-            Element img = a.select("img").get(0);
-            String remark = div.select("span.badge.badge-success").get(0).text();
-            String vodPic = img.attr("src").startsWith("http") ? img.attr("src") : url + img.attr("src");
-            String name = img.attr("alt");
-            if (!TextUtils.isEmpty(name)) list.add(new Vod(a.attr("href").substring(3), name, vodPic, remark));
-        }
-        return Result.string(list);
+        return Result.string(parseVods(doc));
     }
 }
