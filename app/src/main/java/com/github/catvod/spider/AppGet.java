@@ -1,22 +1,17 @@
 package com.github.catvod.spider;
-
 import android.content.Context;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
-
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Filter;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-
 import com.google.gson.JsonObject;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
-
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -28,11 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 
 public class AppGet extends Spider {
 
@@ -85,18 +78,7 @@ public class AppGet extends Spider {
     // API 请求
     // =========================================================
 
-    /**
-     * 调用 App API。
-     *
-     * 流程：
-     *
-     * 1. 组装请求地址
-     * 2. 生成请求 Header
-     * 3. POST
-     * 4. 获取 data
-     * 5. AES-CBC 解密
-     * 6. 返回 JSON 字符串
-     */
+    
     private String requestApi(String apiPath, String requestBody) {
         try {
             String verifyTime =
@@ -200,8 +182,7 @@ public class AppGet extends Spider {
                     );
 
             /*
-             * 原程序这里不是对播放地址加密，
-             * 而是对当前时间戳进行 AES 加密，
+             *对当前时间戳进行 AES 加密，
              * 然后 Base64。
              */
             String verifySign =
@@ -286,17 +267,7 @@ public class AppGet extends Spider {
                             dataIv
                     );
 
-            /*
-             * 原接口返回：
-             *
-             * {
-             *     "json": {
-             *         "url": "..."
-             *     }
-             * }
-             *
-             * 反编译代码实际是把 JSON 转 Map 后取 json。
-             */
+           
             JSONObject root =
                     new JSONObject(json);
 
@@ -342,16 +313,7 @@ public class AppGet extends Spider {
 
         String filterKey = key;
 
-        /*
-         * 原程序：
-         *
-         * sort -> by
-         *
-         * 但后面又根据 sort 判断中文名称。
-         *
-         * 因此这里保留原逻辑意图：
-         * 宿主实际提交参数使用 by。
-         */
+       
         if ("sort".equals(filterKey)) {
             filterKey = "by";
         }
@@ -382,11 +344,7 @@ public class AppGet extends Spider {
     // URL 检查
     // =========================================================
 
-    /**
-     * 检查候选 API 地址是否有效。
-     *
-     * 原程序使用 HEAD。
-     */
+   
     private boolean isUrlValid(String url) {
         try {
             HttpURLConnection connection =
@@ -990,7 +948,7 @@ public class AppGet extends Spider {
                             );
 
                     /*
-                     * 原程序明确过滤掉这些分类。
+                     * 过滤掉这些分类。
                      */
                     if (typeName.contains("正版QQ群")
                             || "伦理".equals(typeName)
@@ -1034,15 +992,7 @@ public class AppGet extends Spider {
                                         "name"
                                 );
 
-                        /*
-                         * 原程序只处理：
-                         *
-                         * class
-                         * area
-                         * lang
-                         * year
-                         * sort
-                         */
+                        
                         if (!"class".equals(name)
                                 && !"area".equals(name)
                                 && !"lang".equals(name)
@@ -1253,12 +1203,12 @@ public class AppGet extends Spider {
         try {
 
             /*
-             * 原播放 ID 格式：
+             * 播放 ID 格式：
              *
              * url|vodName|vodIndex
              *
              * 某些情况下为 4 段，
-             * 原程序会去掉第二段。
+             * 会去掉第二段。
              */
             String[] parts =
                     id.split("\\|");
@@ -1295,7 +1245,7 @@ public class AppGet extends Spider {
                     createHeaders();
 
             /*
-             * 原程序这里特意使用 Chrome UA
+             * 使用 Chrome UA
              * 作为后续播放 Header。
              */
             headers.put(
@@ -1429,26 +1379,7 @@ public class AppGet extends Spider {
                         );
                     }
 
-                    /*
-                     * 原代码这里是：
-                     *
-                     * C2238b.m6062b(
-                     *     strOptString,
-                     *     m417b()
-                     * )
-                     *
-                     * 根据你的 API 映射：
-                     *
-                     * C2238b.m6062b
-                     *       ↓
-                     * OkHttp.getLocation
-                     *
-                     * 注意：
-                     * 原代码传入的是空的 strOptString。
-                     *
-                     * 这很可能是反编译后暴露出的原始逻辑问题，
-                     * 因此这里不主动改变它的行为。
-                     */
+                   
                     String location =
                             OkHttp.getLocation(
                                     parsedUrl,
@@ -1515,16 +1446,6 @@ public class AppGet extends Spider {
     /**
      * 创建播放结果。
      *
-     * 原来的：
-     *
-     * C2192c
-     *
-     * 根据你的映射直接改为：
-     *
-     * Result.get()
-     *     .url(...)
-     *     .header(...)
-     *     .string()
      */
     private String buildPlayerResult(
             String url,
