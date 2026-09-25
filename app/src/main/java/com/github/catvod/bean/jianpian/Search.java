@@ -31,7 +31,7 @@ public class Search {
     }
 
     public String getThumbnail() {
-        return TextUtils.isEmpty(thumbnail) ? "" : "http://img1.vbwus.com" + thumbnail;
+        return TextUtils.isEmpty(thumbnail) ? "" : "https://img.ypfbj.com" + thumbnail;
     }
 
     public String getTitle() {
