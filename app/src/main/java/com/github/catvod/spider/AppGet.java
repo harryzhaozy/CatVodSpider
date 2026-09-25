@@ -146,7 +146,7 @@ public class AppGet extends Spider {
                             url,
                             requestBody,
                             headers
-                    );
+                    ).getBody();
 
             JSONObject json =
                     new JSONObject(response);
@@ -273,7 +273,7 @@ public class AppGet extends Spider {
                             apiUrl,
                             encodedUrl,
                             headers
-                    );
+                    ).getBody();
 
             String decrypted =
                     new JSONObject(response)
@@ -611,9 +611,9 @@ public class AppGet extends Spider {
                     vodObject.optString("vod_director")
             );
 
-            vod.setVodClass(
-                    vodObject.optString("vod_class")
-            );
+           // vod.setVodClass(
+           //         vodObject.optString("vod_class")
+           // );
 
 
             /*
@@ -1202,8 +1202,8 @@ public class AppGet extends Spider {
             /*
              * 获取宿主关键词屏蔽表。
              */
-            keywordsMap =
-                    Init.getKeywordsMap();
+            // keywordsMap =
+            //        Init.getKeywordsMap();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -1218,63 +1218,25 @@ public class AppGet extends Spider {
     /**
      * 将服务器返回的 Vod 数组转换为 TVBox Vod。
      */
-    private List<Vod> parseVodList(
-            JSONArray array
-    ) {
+    public List<Vod> parseVodList(JSONArray array) {
+    List<Vod> list = new ArrayList<>();
 
-        List<Vod> result =
-                new ArrayList<>();
+    for (int i = 0; i < array.length(); i++) {
+        try {
+            JSONObject object = array.getJSONObject(i);
 
-        if (array == null) {
-            return result;
+            list.add(new Vod(
+                    object.optString("vod_id"),
+                    object.optString("vod_name"),
+                    object.optString("vod_pic"),
+                    object.optString("vod_remarks")
+            ));
+        } catch (Exception ignored) {
         }
-
-        for (int i = 0;
-             i < array.length();
-             i++) {
-
-            try {
-
-                JSONObject item =
-                        array.getJSONObject(i);
-
-                String name =
-                        item.optString(
-                                "vod_name"
-                        );
-
-                /*
-                 * 原程序：
-                 *
-                 * 如果关键词表为空，
-                 * 或者当前名称不在关键词表，
-                 * 才加入结果。
-                 */
-                if (keywordsMap.isEmpty()
-                        || !keywordsMap.containsKey(name)) {
-
-                    result.add(
-                            new Vod(
-                                    item.optString(
-                                            "vod_id"
-                                    ),
-                                    name,
-                                    item.optString(
-                                            "vod_pic"
-                                    ),
-                                    item.optString(
-                                            "vod_remarks"
-                                    )
-                            )
-                    );
-                }
-
-            } catch (Exception ignored) {
-            }
-        }
-
-        return result;
     }
+
+    return list;
+}
 
 
     // =========================================================
@@ -1572,7 +1534,7 @@ public class AppGet extends Spider {
 
         return Result.get()
                 .url(url)
-                .danmaku(danmakuUrl)
+                // .danmaku(danmakuUrl)
                 .header(headers)
                 .string();
     }
