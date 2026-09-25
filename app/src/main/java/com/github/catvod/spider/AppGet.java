@@ -1179,15 +1179,15 @@ public class AppGet extends Spider {
                             "dataIv"
                     );
 
-            deviceId =
-                    config.optString(
-                            "deviceId"
-                    );
+            deviceId ="k4h850043nzhwl9ulja5c3zg327nq165";
+                    //config.optString(
+                    //        "deviceId"
+                    //);
 
-            appVersion =
-                    config.optString(
-                            "version"
-                    );
+            appVersion ="113";
+                    //config.optString(
+                    //        "version"
+                    //);
 
             userAgent =
                     config.optString(
