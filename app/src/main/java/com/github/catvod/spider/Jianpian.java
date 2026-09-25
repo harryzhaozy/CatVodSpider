@@ -119,7 +119,7 @@ public class Jianpian extends Spider {
         Search search = Search.objectFrom(OkHttp.string(url, getHeader()));
         //for (Search data : search.getData()) list.add(data.vod());
         for (Search data : search.getData()) {
-            if (data.getTitle().equals(key)) {
+            if (data.getTitle().contains(key)) {
                 list.add(data.vod());
             }
         }
