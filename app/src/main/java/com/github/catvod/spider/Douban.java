@@ -154,6 +154,10 @@ public class Douban extends Spider {
         List<Vod> list = new ArrayList<>();
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
+            String type = item.optString("type");
+            if (!"tv".equals(type) && !"movie".equals(type)) {
+                continue;
+            }
             String vodId = "msearch:" + item.optString("id");
             String name = item.optString("title");
             String pic = getPic(item);
