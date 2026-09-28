@@ -10,7 +10,8 @@ android {
 
     defaultConfig {
         applicationId "com.github.catvod.demo"
-        minSdk 21
+        //minSdk 21
+        minSdk 19 // 修改为 19 (Android 4.4)
         targetSdk 35
     }
 
@@ -43,11 +44,11 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
     implementation 'com.github.thegrizzlylabs:sardine-android:0.9'
     implementation 'wang.harlon.quickjs:wrapper-android:3.2.0'
-    implementation 'com.google.code.gson:gson:2.11.0'
+    //implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'com.google.code.gson:gson:2.8.9' // 降级 Gson
     implementation 'cn.wanghaomiao:JsoupXpath:2.5.1'
     implementation 'com.hierynomus:smbj:0.14.0'
     implementation 'com.orhanobut:logger:2.2.0'
-    //implementation 'org.jsoup:jsoup:1.19.1'
     implementation 'org.jsoup:jsoup:1.12.1'
     implementation 'com.google.zxing:core:3.5.3'
     
